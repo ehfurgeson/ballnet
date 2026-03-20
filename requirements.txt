@@ -1,0 +1,19 @@
+# Minimal dependencies to reproduce the GATv2TCN training/inference pipeline.
+# Non-pinned on purpose: torch/torch-geometric install is platform/version-specific.
+#
+# Note: `torch-geometric` requires additional PyG wheels (torch-scatter/torch-sparse/etc.)
+# depending on your torch + CUDA version. Follow the official PyG install instructions.
+
+torch
+torch-geometric
+networkx
+numpy
+pandas
+pyarrow
+nba_api
+scikit-learn
+scipy
+tqdm
+matplotlib
+requests
+

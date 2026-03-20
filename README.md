@@ -2,15 +2,8 @@
 
 ## Overview
 
-ballnet is a self-contained, copy-pasteable NBA player prop prediction engine built
-around a trained **GATv2TCN** (Graph Attention Network + Temporal Convolutional Network)
-model. It provides:
-
-1. **Inference** — point estimates and calibrated over/under probabilities for any player-stat-threshold triple
-2. **Model evaluation** — validate prediction quality (RMSE/MAE/CORR) on the dataset split used during calibration
-
-The folder is designed to be fully portable. All paths resolve relative to `clean/` using
-`Path(__file__).resolve()`, so you can copy it anywhere and it will work.
+ballnet is a self-contained, copy-pasteable NBA player prop prediction engine built around a trained **GATv2TCN** (Graph Attention Network + Temporal Convolutional Network) model. 
+It provides point estimates and calibrated probabilities for any player and statistic (of those in the outputs, which includes points, assists, rebounds, turnovers, steals, and blocks)
 
 **To switch to a new model**, change one line in `config.py`:
 ```python
@@ -37,7 +30,6 @@ clean/
 │
 ├── data/                      # Runtime data (gitignored: *.pkl, *.npy, *.parquet)
 │   ├── raw_boxscores.parquet          # Full NBA game log (built by 01_fetch_data.py)
-│   ├── game_embeddings.parquet        # ← Per-game team embeddings from backbone splice (07_extract_game_embeddings.py)
 │   ├── game_home_teams.parquet        # ← {GAME_ID: home_team_abbr} from LeagueGameFinder (cached)
 │   ├── X_seq.pkl              # (Days, Players, 13) forward-filled stat tensor
 │   ├── X_raw.pkl              # (Days, Players, 13) raw sparse stat tensor (no fill)
@@ -66,19 +58,15 @@ clean/
 │   ├── 02_build_tensors.py          # Build tensors from raw data
 │   ├── 03_train.py                  # Training script (MPS/CUDA/Colab)
 │   ├── 04_calibrate.py              # Compute conformal_residuals.pkl
-│   ├── 07_extract_game_embeddings.py      # Extract backbone embeddings
 │   └── prepare_colab.py             # Package for Colab training
 │
-├── upload/                    # Google Colab upload bundle
-│   ├── train.ipynb            # Colab bootstrap notebook
-│   ├── config.py              # Colab path shim
-│   ├── scripts/03_train.py    # Training script copy
-│   ├── gatv2tcn.py            # Model source
-│   ├── tcn.py                 # TCN source
-│   └── data/                  # Required data files
-│
-└── logs/                      # Output logs (gitignored)
-    └── predictions/           # predictions_YYYY-MM-DD.csv (optional)
+└── upload/                    # Google Colab upload bundle
+    ├── train.ipynb            # Colab bootstrap notebook
+    ├── config.py              # Colab path shim
+    ├── scripts/03_train.py    # Training script copy
+    ├── gatv2tcn.py            # Model source
+    ├── tcn.py                 # TCN source
+    └── data/                  # Required data files
 ```
 
 ---
@@ -118,21 +106,7 @@ python scripts/02_build_tensors.py   # regenerate tensors
 python scripts/prepare_colab.py      # rebuild upload/ bundle with fresh data
 # ... train on Colab, copy weights ...
 python scripts/04_calibrate.py       # recompute residuals for new weights
-
-# After retraining: re-extract game embeddings with fresh weights
-python scripts/07_extract_game_embeddings.py --cutoff YYYY-MM-DD
 ```
-
-### Game outcome evaluation
-```bash
-# Extract backbone embeddings + train game-outcome linear/MLP head
-python scripts/07_extract_game_embeddings.py --cutoff 2026-03-05
-# Re-run with cached embeddings after model retrain:
-python scripts/07_extract_game_embeddings.py --skip-extract
-```
-
-> See `game_embeddings.md` for full results, architecture details, and future directions.
-
 ---
 
 ## config.py
@@ -440,10 +414,8 @@ typically have 0 samples — the model rarely predicts these stats that high).
 | 8 | Colab/local parity | **Never duplicate training logic** in `prepare_colab.py` or the notebook. All training code lives in `03_train.py`. Edit `03_train.py` → re-run `prepare_colab.py` → upload. |
 | 9 | Double-denormalization | The model natively outputs raw stat predictions. Never multiply by `sd_per_day` or add `mu` in `predictor.py` or `04_calibrate.py`. That inflates predictions (24.5 PTS → 260 PTS). |
 | 10 | conformal_residuals.pkl format | The file uses a **tiered format**. Use `predictor._get_residuals_for(stat, pred_val)` or `predictor.get_residual_std(stat)` instead. |
-| 11 | BackboneWithEmbedding sync | `BackboneWithEmbedding` in `07_extract_game_embeddings.py` replicates `forward()` step-by-step. If `architecture/gatv2tcn.py` is ever modified, the wrapper must be updated in sync. |
-| 12 | Game embedding stale after retrain | `data/game_embeddings.parquet` is tied to model weights. Always re-run `python scripts/07_extract_game_embeddings.py` (without `--skip-extract`) after copying new `.pth` files. |
-| 13 | LOG_TRANSFORM semantics | `predictor.py` and `04_calibrate.py` must have `LOG_TRANSFORM` set correctly based on the active model's training configuration. |
-| 14 | Colab train.ipynb is NOT the canonical script | Training logic lives in `scripts/03_train.py` only. Re-run `prepare_colab.py` before every Colab upload so the bundle includes the current `03_train.py`. |
+| 11 | LOG_TRANSFORM semantics | `predictor.py` and `04_calibrate.py` must have `LOG_TRANSFORM` set correctly based on the active model's training configuration. |
+| 12 | Colab train.ipynb is NOT the canonical script | Training logic lives in `scripts/03_train.py` only. Re-run `prepare_colab.py` before every Colab upload so the bundle includes the current `03_train.py`. |
 
 ---
 
@@ -463,7 +435,7 @@ matplotlib                   # plotting
 
 The model source (`gatv2tcn.py`, `tcn.py`) lives at:
 ```
-../networks/ballnet/NBA-GNN-prediction/
+architecture/
 ```
 This path is referenced in `config.py` as `GATV2_SRC` and used by `03_train.py`,
 `04_calibrate.py`, and `prepare_colab.py` (which copies the files into `upload/`).
