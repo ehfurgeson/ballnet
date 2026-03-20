@@ -7,8 +7,7 @@ around a trained **GATv2TCN** (Graph Attention Network + Temporal Convolutional 
 model. It provides:
 
 1. **Inference** — point estimates and calibrated over/under probabilities for any player-stat-threshold triple
-2. **Live trading** — automated EV-based order placement on Kalshi prediction markets
-3. **Backtesting** — historical simulation of EV strategies with configurable Kelly sizing
+2. **Model evaluation** — validate prediction quality (RMSE/MAE/CORR) on the dataset split used during calibration
 
 The folder is designed to be fully portable. All paths resolve relative to `clean/` using
 `Path(__file__).resolve()`, so you can copy it anywhere and it will work.
@@ -17,7 +16,7 @@ The folder is designed to be fully portable. All paths resolve relative to `clea
 ```python
 ACTIVE_MODEL = "v5"   # was "v3"
 ```
-Both `live.py`, `backtest.py`, and `test.py` import `config.py` and will automatically use weights
+Training and evaluation scripts import `config.py` and will automatically use weights
 from `models/v5/`.
 
 ---
@@ -27,15 +26,10 @@ from `models/v5/`.
 ```
 clean/
 ├── README.md                  # This file
-├── game_embeddings.md         # ← Game outcome prediction reference (read this for embedding work)
+├── game_embeddings.md         # ← Game outcome prediction reference (optional)
 ├── config.py                  # ← Single source of truth for all paths + hyperparams
-├── predictor.py               # Core predictor class (shared by scripts)
-├── update.py                  # ← Daily data refresh (run once before live.py)
-├── live.py                    # Live trading on Kalshi (EV filter + Kelly sizing)
-├── backtest.py                # Historical backtesting engine (player props)
-├── test.py                    # ← Model inference quality test (RMSE/MAE/CORR)
-├── kalshi_manual.py           # ← Manual trading CLI for Kalshi
-├── analysis.qmd               # ← Quarto analysis for backtest results and predictions
+├── predictor.py               # Core predictor class (loads artifacts + runs inference)
+├── update.py                  # ← Data refresh / rebuild tensors (optional)
 │
 ├── architecture/              # Model architecture source
 │   ├── gatv2tcn.py            # GATv2TCN implementation
@@ -43,8 +37,6 @@ clean/
 │
 ├── data/                      # Runtime data (gitignored: *.pkl, *.npy, *.parquet)
 │   ├── raw_boxscores.parquet          # Full NBA game log (built by 01_fetch_data.py)
-│   ├── kalshi_pregame_prices.parquet  # ← Pre-game bid/ask prices for player props (05_collect_kalshi_history.py)
-│   ├── kalshi_game_markets.parquet    # ← Pre-game prices for game-level markets (06_collect_kalshi_game_markets.py)
 │   ├── game_embeddings.parquet        # ← Per-game team embeddings from backbone splice (07_extract_game_embeddings.py)
 │   ├── game_home_teams.parquet        # ← {GAME_ID: home_team_abbr} from LeagueGameFinder (cached)
 │   ├── X_seq.pkl              # (Days, Players, 13) forward-filled stat tensor
@@ -74,8 +66,6 @@ clean/
 │   ├── 02_build_tensors.py          # Build tensors from raw data
 │   ├── 03_train.py                  # Training script (MPS/CUDA/Colab)
 │   ├── 04_calibrate.py              # Compute conformal_residuals.pkl
-│   ├── 05_collect_kalshi_history.py # Fetch pre-game bid/ask prices
-│   ├── 06_collect_kalshi_game_markets.py  # Collect game-level market prices
 │   ├── 07_extract_game_embeddings.py      # Extract backbone embeddings
 │   └── prepare_colab.py             # Package for Colab training
 │
@@ -88,9 +78,7 @@ clean/
 │   └── data/                  # Required data files
 │
 └── logs/                      # Output logs (gitignored)
-    ├── predictions/           # predictions_YYYY-MM-DD.csv
-    ├── trades/                # trades_YYYY-MM-DD.csv
-    └── backtest/              # backtest_summaries.parquet, backtest_bets.parquet
+    └── predictions/           # predictions_YYYY-MM-DD.csv (optional)
 ```
 
 ---
@@ -116,49 +104,12 @@ python scripts/03_train.py
 
 # 4. Calibrate the model (computes conformal residuals)
 python scripts/04_calibrate.py
-
-# 5. Collect historical pre-game Kalshi prices for backtesting
-#    Public API, no auth required. ~35 min for a full season of data.
-python scripts/05_collect_kalshi_history.py --start 2026-01-16 --end 2026-02-22
 ```
 
 ### Daily workflow
 ```bash
 # Fetch any new games and update all tensors
 python update.py
-
-# Run live trading (dry-run by default — set LIVE=True in live.py to place real bets)
-python live.py
-
-# (Optional) Run manual trading CLI for specific tickers
-python kalshi_manual.py
-
-# Incrementally collect yesterday's prices (appends new rows, skips existing tickers)
-python scripts/05_collect_kalshi_history.py  # defaults to last 30 days
-```
-
-### Running the backtest
-```bash
-# Full sweep — reads data/kalshi_pregame_prices.parquet
-python backtest.py --strategy conformal --configs 100 --top 10
-
-# Use cached opportunities (skip re-extraction, saves ~2 min)
-python backtest.py --use-cache --configs 100
-
-# Naive Gaussian baseline (no conformal residuals)
-python backtest.py --strategy naive
-
-# After collecting new prices, clear the cache first:
-rm data/ops_*_cache.parquet data/quantile_test_cache.parquet
-```
-
-### Strategy Validation & Quality Check
-```bash
-# Run model inference quality test (reports RMSE/MAE/CORR vs targets)
-python test.py
-
-# Analyze backtest results and strategy parameters
-quarto render analysis.qmd
 ```
 
 ### Retraining (updated data)
@@ -174,9 +125,6 @@ python scripts/07_extract_game_embeddings.py --cutoff YYYY-MM-DD
 
 ### Game outcome evaluation
 ```bash
-# Collect Kalshi game-level market prices (moneyline, spread, total)
-python scripts/06_collect_kalshi_game_markets.py --start 2026-01-16 --end 2026-03-05
-
 # Extract backbone embeddings + train game-outcome linear/MLP head
 python scripts/07_extract_game_embeddings.py --cutoff 2026-03-05
 # Re-run with cached embeddings after model retrain:
@@ -333,7 +281,7 @@ Training:  35% | 105/300 [train=38.4, val=21.3, best=18.9, saved=★]
 
 ## predictor.py — GATv2Predictor
 
-The core class loaded by both `live.py` and `backtest.py`.
+The core predictor class used by inference and evaluation scripts.
 
 ### Setup
 ```python
@@ -351,23 +299,23 @@ After loading `conformal_residuals.pkl`, the predictor exposes:
 
 **Key public helpers:**
 ```python
-p.get_residual_std("PTS")   # mid-tier std — used by quantile_test.py and live.py SD filter
+p.get_residual_std("PTS")   # mid-tier std — used by quantile_test.py (and any tiered SD filter)
 ```
 
 ### Inference methods
 
-#### Fast path — use in `backtest.py`
+#### Fast path — use for day-level batched predictions
 ```python
 # ONE forward pass for all 805 players, cached per day
 pred_matrix = p.predict_all_for_day(day_idx)     # → (P, 6) raw stat units
 mc_matrix   = p.predict_all_mc_for_day(day_idx)  # → (20, P, 6) MC-dropout samples
 ```
 Both methods are **memoized** by `day_idx`. Calling them twice for the same day is
-a free dict lookup. This is ~150× faster than the per-player approach for backtest.
+a free dict lookup. This is ~150× faster than the per-player approach for large batches.
 
 Use `_get_day_idx_for_date("2025-02-15")` to convert a date string to an index.
 
-#### Convenience wrappers — use in `live.py`
+#### Convenience wrappers — use for per-player queries
 ```python
 p.predict_point_estimate(player_id, "PTS")
 p.predict_conformal_probability(player_id, "PTS", 22.5)
@@ -379,123 +327,6 @@ if called multiple times for the same day.
 ```python
 p.clear_day_cache()   # frees _day_cache and _mc_cache dicts if RAM is tight
 ```
-
----
-
-## backtest.py
-
-### Data source
-`backtest.py` reads **`data/kalshi_pregame_prices.parquet`** — built by
-`scripts/05_collect_kalshi_history.py`. Each row contains a real Kalshi bid/ask
-price from the last 1-minute candlestick before tip-off, alongside player, stat,
-threshold, and outcome columns.
-
-> **Important**: Before running `backtest.py`, make sure
-> `data/kalshi_pregame_prices.parquet` exists. If it doesn't:
-> ```bash
-> python scripts/05_collect_kalshi_history.py --start YYYY-MM-DD --end YYYY-MM-DD
-> ```
-
-The old approach (reading per-day JSON files, using `previous_yes_ask` as a proxy)
-has been replaced. `previous_yes_ask` was the price at the last API poll before
-permanent data collection — not the actual pre-game price. The new approach fetches
-candlestick history for each ticker and records the price of the closest 1-minute
-candle before tip-off.
-
-### Date Alignment and Inference
-`extract_opportunities()` groups all props by `game_date` (from the parquet). To
-prevent target leakage, the model is evaluated on `game_date - 1 day`.
-
-At the start of each inference date context:
-1. **1 eval forward pass** → `(805, 6)` prediction matrix (memoized)
-2. **20 MC-dropout passes** → `(20, 805, 6)` sample matrix (memoized)
-3. All props on that day → **numpy array lookups**, no model calls
-
-Old approach: `150 props × 21 passes = 3,150` forward passes per day.
-New approach: **21 forward passes** per day, regardless of number of props (~150× faster).
-
-### Strategy options
-```bash
-python backtest.py                        # conformal (MC-dropout + residuals)
-python backtest.py --strategy naive       # Gaussian approximation using STAT_RMSE
-python backtest.py --configs 100          # smaller config sweep (default: 5000)
-python backtest.py --top 10              # print top N configs by Sharpe
-python backtest.py --use-cache           # skip extraction, use cached ops parquet
-```
-
-### Conformal probability details
-Per prop under `conformal` strategy:
-```python
-# 1. Bias-correct the MC samples
-samples = mc_matrix[:, pidx, si] + predictor.val_bias[stat]
-# 2. Select tier based on corrected mean estimate (low/mid/high)
-residuals = predictor._get_residuals_for(stat, mean(samples))
-# 3. Build 2000-sample distribution
-res  = np.random.choice(residuals, (20, 100))
-dist = (samples[:, None] + res).flatten()
-p_over = mean(dist > threshold)
-```
-Residuals come from `04_calibrate.py` — signed errors on the validation set,
-mean-centered per stat and stratified by predicted value magnitude.
-
-### EV calculation
-```python
-ev_yes = (p_over * (100 - yes_ask) - p_under * yes_ask) / 100
-ev_no  = (p_under * (100 - no_ask) - p_over  * no_ask)  / 100
-```
-Values in **[-1, 1]** range (EV per dollar wagered). The `/100` divisor is critical.
-
----
-
-## scripts/05_collect_kalshi_history.py
-
-Fetches **real pre-game Kalshi bid/ask prices** for all NBA player props in a date
-range and saves them to `data/kalshi_pregame_prices.parquet`.
-
-### How it works
-1. **NBA tip-off times** — `nba_api.ScoreboardV3` returns `gameTimeUTC` directly
-   as an ISO UTC timestamp per game. (Uses V3, not V2 which is deprecated for 2025-26.)
-2. **Market discovery** — paginates `GET /markets?series_ticker=KXNBAPTS&min_close_ts=...`
-   (public, no auth) to list all settled props in the date range.
-3. **Candlestick prices** — for each ticker, calls
-   `GET /series/{SERIES}/markets/{ticker}/candlesticks?period_interval=1` to get
-   1-minute price history. Finds the **last candle at or before tip-off** and records
-   its close price as the pre-game bid/ask.
-4. **Saves** to `data/kalshi_pregame_prices.parquet` in **append mode** — re-running
-   only adds new tickers, never duplicates existing ones.
-
-### Output columns
-| Column | Description |
-|--------|-------------|
-| `ticker` | Kalshi market ticker |
-| `event_ticker` | Game identifier |
-| `game_date` | YYYY-MM-DD |
-| `player` | Player name from market title |
-| `stat` | PTS / AST / REB / BLK / STL |
-| `threshold` | The prop line (float) |
-| `result` | `yes` or `no` |
-| `yes_ask` | Pre-game YES ask in cents (1–99) |
-| `yes_bid` | Pre-game YES bid in cents |
-| `no_ask` | 100 − yes_bid |
-| `no_bid` | 100 − yes_ask |
-| `price_ts` | Unix timestamp of the candle used |
-| `game_start_ts` | Actual tip-off Unix timestamp from nba_api |
-| `price_age_s` | Seconds between candle and tip-off |
-| `spread` | yes_ask − yes_bid (market tightness) |
-
-### Usage
-```bash
-# First run — collect a historical range
-python scripts/05_collect_kalshi_history.py --start 2026-01-16 --end 2026-02-22
-
-# Incremental update (defaults to last 30 days, appends new rows)
-python scripts/05_collect_kalshi_history.py
-
-# Preview without writing
-python scripts/05_collect_kalshi_history.py --start 2026-01-16 --end 2026-01-17 --dry-run
-```
-
-> After running, delete `data/ops_*_cache.parquet` before re-running `backtest.py`.
 
 ---
 
@@ -608,17 +439,11 @@ typically have 0 samples — the model rarely predicts these stats that high).
 | 7 | Upload/ freshness | Re-run `prepare_colab.py` every time you want to retrain with updated data. It copies fresh pkl files AND `03_train.py`. |
 | 8 | Colab/local parity | **Never duplicate training logic** in `prepare_colab.py` or the notebook. All training code lives in `03_train.py`. Edit `03_train.py` → re-run `prepare_colab.py` → upload. |
 | 9 | Double-denormalization | The model natively outputs raw stat predictions. Never multiply by `sd_per_day` or add `mu` in `predictor.py` or `04_calibrate.py`. That inflates predictions (24.5 PTS → 260 PTS). |
-| 10 | EV formula scale | `calc_ev` **must** divide by 100. Without it, EV values are 100× too large (cents not fraction) and no bets will pass any realistic `min_ev` threshold. |
-| 11 | Kalshi candlestick endpoint | For markets settled after 2025-03-01 (the live partition), the correct endpoint is `GET /series/{SERIES}/markets/{ticker}/candlesticks`. Do NOT use `/historical/markets/{ticker}/candlesticks` — it returns 404 for recent markets. |
-| 12 | Kalshi price units | The live `/series/…/candlesticks` endpoint returns prices as **integer cents (0–100)**. The historical endpoint returns dollar strings (`"0.5600"`). They are different formats. |
-| 13 | nba_api ScoreboardV3 headers | `ScoreboardV3` uses **camelCase** headers: `gameCode`, `gameTimeUTC`. Do not use `ScoreboardV2` names (`GAMECODE`, `GAME_STATUS_TEXT`) — they will raise `ValueError`. Use `ScoreboardV3`; V2 is deprecated for 2025-26 and hangs on SSL for some game dates. |
-| 14 | Kalshi close_ts vs game date | NBA games played on date X have markets that close on date X+1. When filtering `/markets?min_close_ts=...&max_close_ts=...`, extend end by **+2 days** to catch all games in the target range. |
-| 15 | Backtest cache staleness | After collecting new prices via `05_collect_kalshi_history.py`, delete `data/ops_*_cache.parquet` before re-running `backtest.py`. The cache is keyed by strategy name, not data freshness. |
-| 16 | conformal_residuals.pkl format | The file now uses a **tiered format**. Use `predictor._get_residuals_for(stat, pred_val)` or `predictor.get_residual_std(stat)` instead. After re-calibrating, always delete backtest caches. |
-| 17 | BackboneWithEmbedding sync | `BackboneWithEmbedding` in `07_extract_game_embeddings.py` replicates `forward()` step-by-step. If `architecture/gatv2tcn.py` is ever modified, the wrapper must be updated in sync. |
-| 18 | Game embedding stale after retrain | `data/game_embeddings.parquet` is tied to model weights. Always re-run `python scripts/07_extract_game_embeddings.py` (without `--skip-extract`) after copying new `.pth` files. |
-| 19 | LOG_TRANSFORM semantics | The model natively outputs raw stat predictions. `predictor.py` and `04_calibrate.py` must have `LOG_TRANSFORM` set correctly based on the active model's training configuration. |
-| 20 | Colab train.ipynb is NOT the canonical script | Training logic lives in `scripts/03_train.py` only. Re-run `prepare_colab.py` before every Colab upload so the bundle includes the current `03_train.py`. |
+| 10 | conformal_residuals.pkl format | The file uses a **tiered format**. Use `predictor._get_residuals_for(stat, pred_val)` or `predictor.get_residual_std(stat)` instead. |
+| 11 | BackboneWithEmbedding sync | `BackboneWithEmbedding` in `07_extract_game_embeddings.py` replicates `forward()` step-by-step. If `architecture/gatv2tcn.py` is ever modified, the wrapper must be updated in sync. |
+| 12 | Game embedding stale after retrain | `data/game_embeddings.parquet` is tied to model weights. Always re-run `python scripts/07_extract_game_embeddings.py` (without `--skip-extract`) after copying new `.pth` files. |
+| 13 | LOG_TRANSFORM semantics | `predictor.py` and `04_calibrate.py` must have `LOG_TRANSFORM` set correctly based on the active model's training configuration. |
+| 14 | Colab train.ipynb is NOT the canonical script | Training logic lives in `scripts/03_train.py` only. Re-run `prepare_colab.py` before every Colab upload so the bundle includes the current `03_train.py`. |
 
 ---
 
@@ -634,8 +459,6 @@ scikit-learn statsmodels     # utilities & metrics
 scipy                        # conformal probability (norm.cdf)
 tqdm seaborn patsy xgboost   # visualization and analysis
 matplotlib                   # plotting
-requests python-dotenv       # Kalshi API
-cryptography                 # RSA-PSS auth
 ```
 
 The model source (`gatv2tcn.py`, `tcn.py`) lives at:
