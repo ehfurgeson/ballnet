@@ -1,13 +1,8 @@
-# knowball/clean — NBA Player Prop Inference & Backtesting Engine
-
-> **For AI Agents**: Read this entire file before editing any script in this folder.
-> All paths, data flows, known gotchas, and design decisions are documented here.
-
----
+# ballnet
 
 ## Overview
 
-`clean/` is a self-contained, copy-pasteable NBA player prop prediction engine built
+ballnet is a self-contained, copy-pasteable NBA player prop prediction engine built
 around a trained **GATv2TCN** (Graph Attention Network + Temporal Convolutional Network)
 model. It provides:
 
