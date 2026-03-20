@@ -1,0 +1,12 @@
+.DS_Store
+.pytest_cache
+__pycache__
+data
+.env
+*.pem
+kalshi_private_key.pem
+playeralpha
+logs
+models/maxbid
+models/maxbid_after
+models/minask
