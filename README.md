@@ -2,7 +2,7 @@
 
 ## Overview
 
-ballnet is a self-contained, copy-pasteable NBA player prop prediction engine built around a trained **GATv2TCN** (Graph Attention Network + Temporal Convolutional Network) model. 
+ballnet uses a **GATv2TCN** (Graph Attention Network + Temporal Convolutional Network) model to predict NBA statlines. 
 It provides point estimates and calibrated probabilities for any player and statistic (of those in the outputs, which includes points, assists, rebounds, turnovers, steals, and blocks)
 
 **To switch to a new model**, change one line in `config.py`:
