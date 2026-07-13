@@ -4,12 +4,4 @@ __pycache__
 data
 .env
 *.pem
-kalshi_private_key.pem
-playeralpha
-logs
-models/maxbid
-models/maxbid_after
-models/minask
-scripts/05_collect_kalshi_history.py
-scripts/06_collect_kalshi_game_markets.py
-scripts/07_extract_game_embeddings.py
+reminders.md
