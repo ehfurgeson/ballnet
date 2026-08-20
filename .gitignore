@@ -5,3 +5,4 @@ data
 .env
 *.pem
 reminders.md
+archive/experiments/
