@@ -1,8 +1,10 @@
 .DS_Store
 .pytest_cache
 __pycache__
+.venv/
+venv/
 data
 .env
 *.pem
 reminders.md
-archive/experiments/
+archive/
