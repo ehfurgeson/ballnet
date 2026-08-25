@@ -16,6 +16,8 @@ INDEX_DIR = DATA_DIR / "index"
 LEAGUE_DIR = DATA_DIR / "league"
 # Stage H weekly boards (not Stage G).
 HIGHLIGHTS_DIR = DATA_DIR / "highlights"
+# Stage H single-game KDEs (league_weekly scope). Not league_ytd.
+LEAGUE_WEEKLY_DIR = DIST_DIR / "league_weekly"
 
 
 def ensure_data_dirs() -> None:
@@ -28,5 +30,6 @@ def ensure_data_dirs() -> None:
         INDEX_DIR,
         LEAGUE_DIR,
         HIGHLIGHTS_DIR,
+        LEAGUE_WEEKLY_DIR,
     ):
         d.mkdir(parents=True, exist_ok=True)

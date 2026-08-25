@@ -38,7 +38,8 @@
 - Returner `position_group` has no weekly rows (nflverse roster positions are rarely KR/PR).
 - Stage G batch (`publish-all`) writes **scalar** JSON under `data/pages/`, shared curves under `data/league/{season}/w{week}/{group}.json`, and rebuilds `data/index/{players,current}.json`. Knowball must not import page JSON into the Next bundle — only the small index.
 - Pre-2018 spines omit many PFR advanced columns (ingest empty stubs). Stage C null-fills expected enrichment cols before aggregate so older seasons publish with `missing_source` instead of crashing.
-- Storage uploads (`upload-storage`) go to public bucket `knowball-public` under `index/`, `pages/`, `league/`, and `highlights/`. Free plan is ~1 GB — skip `--also-current` (duplicates the season). Dashboard drag-drops often land at bucket root; re-upload with `--index` to get `index/*.json`.
+- Storage uploads (`upload-storage`) go to public bucket `knowball-public` under `index/`, `pages/`, `league/`, `highlights/`, and `dists/league_weekly/`. Free plan is ~1 GB — skip `--also-current` (duplicates the season). Dashboard drag-drops often land at bucket root; re-upload with `--index` to get `index/*.json`.
 - Service-role key lives in ballnet `.env` only; Knowball fetches public object URLs (no Supabase client).
 - Never re-embed league `curve` onto player pages; league shapes live under `data/league/` only.
 - League JSON is KDE `curve[]` for every catalog id. Catalog `kind` is metadata; do not emit `bins` or `samples`.
+- Stage H scores oriented z vs season-of-games peers (`week <= W`) and writes allowlist KDEs under `data/dists/league_weekly/` — distinct from Stage D/G `league_ytd` / `league/`.

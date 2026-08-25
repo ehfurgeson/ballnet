@@ -218,7 +218,7 @@ def main(argv: list[str] | None = None) -> None:
 
     p_hi = sub.add_parser(
         "highlights",
-        help="Stage H: weekly highlight board from spine → data/highlights/",
+        help="Stage H: weekly board + league_weekly KDEs from spine",
     )
     p_hi.add_argument("--season", type=int, required=True)
     p_hi.add_argument(
@@ -262,12 +262,12 @@ def main(argv: list[str] | None = None) -> None:
     p_up.add_argument(
         "--highlights",
         action="store_true",
-        help="Upload highlights/{season}/w{week}.json (requires --season)",
+        help="Upload highlights/ + dists/league_weekly/ (requires --season)",
     )
     p_up.add_argument(
         "--highlights-only",
         action="store_true",
-        help="With --season, upload highlights/ only (skip pages + league)",
+        help="With --season, upload highlights + league_weekly only (skip pages + league)",
     )
     p_up.add_argument(
         "--also-current",
@@ -705,12 +705,13 @@ def main(argv: list[str] | None = None) -> None:
     if args.cmd == "highlights":
         week = args.week if args.week is not None else default_as_of_week(args.season)
         print(f"=== highlights {args.season} w{week} ===", flush=True)
-        out = publish_highlights(args.season, week)
-        board = json.loads(out.read_text(encoding="utf-8"))
+        result = publish_highlights(args.season, week)
+        board = json.loads(result.board.read_text(encoding="utf-8"))
         print(
             json.dumps(
                 {
-                    "path": str(out),
+                    "path": str(result.board),
+                    "dists": [str(p) for p in result.dist_paths],
                     "season": board["season"],
                     "week": board["week"],
                     "top": len(board.get("top") or []),
@@ -817,7 +818,8 @@ def main(argv: list[str] | None = None) -> None:
                 )
             if do_highlights:
                 print(
-                    f"=== upload highlights/{args.season}/w{week}.json ===",
+                    f"=== upload highlights + dists/league_weekly "
+                    f"{args.season}/w{week} ===",
                     flush=True,
                 )
                 r = upload_season_highlights(
@@ -828,7 +830,7 @@ def main(argv: list[str] | None = None) -> None:
                 )
                 reports.append(
                     {
-                        "what": f"highlights/{args.season}/w{week}",
+                        "what": f"highlights+league_weekly/{args.season}/w{week}",
                         "uploaded": r.uploaded,
                         "failed": r.failed,
                         "bytes": r.bytes,

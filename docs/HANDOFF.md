@@ -32,7 +32,7 @@ Human visual review of demos is **approved**. Local D→E→G math is good. **Fu
 | **E** | Oriented percentiles | `uv run ballnet percentiles …` → `data/ytd/*_pct.parquet` |
 | **G** | All players for one slice | `uv run ballnet publish-all --season … --as-of-week …` |
 | **G range** | Multi-season pages + merged index | `uv run ballnet publish-range --start 2016 --end 2025` |
-| **H** | Weekly highlight board (z-scores) | `uv run ballnet highlights --season … --week …` → `data/highlights/` |
+| **H** | Weekly highlight board + game-level KDEs | `uv run ballnet highlights --season … --week …` → `data/highlights/` + `data/dists/league_weekly/` |
 
 Spines exist for **2016–2025**. `data/` is gitignored (~4GB+ pages).
 
@@ -48,6 +48,7 @@ Spines exist for **2016–2025**. `data/` is gitignored (~4GB+ pages).
 | Page JSON (scalars) | `data/pages/{season}/w{week}/{gsis}.json` |
 | League KDE curves | `data/league/{season}/w{week}/{group}.json` |
 | Weekly highlights | `data/highlights/{season}/w{week}.json` (Stage H) |
+| Game-level KDEs | `data/dists/league_weekly/{season}/w{week}/{group}.json` (Stage H allowlist) |
 | Current pages | `data/pages/current/` = latest season only (2025 w18) |
 | Search index | `data/index/players.json` (`schemaVersion: 1`, seasons unioned) |
 | Current pointer | `data/index/current.json` → `{ season: 2025, asOfWeek: 18 }` |
@@ -65,6 +66,7 @@ Bucket `knowball-public` (public read) — **2016–2025 uploaded** (scalar page
 | `pages/{season}/w{week}/*.json` | uploaded (all published seasons) |
 | `league/{season}/w{week}/{group}.json` | uploaded (KDE curves; required for charts) |
 | `highlights/{season}/w{week}.json` | Stage H weekly boards (upload with `--highlights`) |
+| `dists/league_weekly/{season}/w{week}/{group}.json` | Stage H single-game KDEs (uploaded with `--highlights`) |
 | `pages/current/` | **skipped** (Knowball uses `index/current.json`) |
 
 CLI: `uv run ballnet upload-storage --index --season YEAR` (uploads pages + league).

@@ -16,9 +16,9 @@ Intended stages inside `refresh` (not a new math path — wrap what already exis
 2. **B** `spine --season YEAR`
 3. **C–E** for every publishable group at `as-of-week W` (ytd → densities → percentiles)
 4. **G** `publish-all --season YEAR --as-of-week W` (scalar pages + league KDE + index/current)
-5. **H** `highlights --season YEAR --week W` (weekly z-score board → `data/highlights/`)
+5. **H** `highlights --season YEAR --week W` (weekly z-score board + `league_weekly` KDEs → `data/highlights/` + `data/dists/league_weekly/`)
 6. Optional: `--sync-knowball` for the search index copy into Knowball
-7. Optional: `--upload` → `upload-storage --index --season YEAR --highlights` (pages + league + highlights)
+7. Optional: `--upload` → `upload-storage --index --season YEAR --highlights` (pages + league + highlights + league_weekly)
 
 Until `refresh` exists, run that sequence manually (see below).
 

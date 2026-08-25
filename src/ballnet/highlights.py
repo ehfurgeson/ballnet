@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+import numpy as np
 import polars as pl
 
 from ballnet.catalog.registry import stats_for_group
-from ballnet.paths import HIGHLIGHTS_DIR, SPINE_DIR, ensure_data_dirs
+from ballnet.catalog.types import StatDefinition
+from ballnet.density import build_league_density
+from ballnet.paths import HIGHLIGHTS_DIR, LEAGUE_WEEKLY_DIR, SPINE_DIR, ensure_data_dirs
 from ballnet.publish import PUBLISHABLE_GROUPS
 from ballnet.scoring import MIN_PEER_N, gaussian_tail_one_in_n, oriented_z_score
 
@@ -24,6 +27,12 @@ PER_GROUP_N = 8
 HIGHLIGHT_GROUPS: tuple[str, ...] = tuple(
     g for g in PUBLISHABLE_GROUPS if g not in ("ol", "punter")
 )
+
+
+@dataclass(frozen=True)
+class HighlightsPublishResult:
+    board: Path
+    dist_paths: list[Path] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -170,26 +179,57 @@ def _allowlist_for_group(group: str) -> list[HighlightStat]:
     return []
 
 
-def _score_stat(
-    week_df: pl.DataFrame,
-    group: str,
-    spec: HighlightStat,
-) -> list[dict[str, Any]]:
-    if week_df.is_empty():
-        return []
-    # Drop rows missing required spine columns used by build.
-    built = spec.build(week_df)
+def _catalog_stat(group: str, stat_id: str) -> StatDefinition | None:
+    for s in stats_for_group(group):
+        if s.id == stat_id:
+            return s
+    return None
+
+
+def _resolve_spec(group: str, spec: HighlightStat) -> HighlightStat:
+    cat = _catalog_stat(group, spec.stat_id)
+    if cat is None:
+        return spec
+    return HighlightStat(
+        spec.stat_id,
+        cat.id.replace("_", " "),
+        cat.higher_is_better,
+        spec.build,
+        spec.volume_floor,
+        spec.min_value,
+    )
+
+
+def _qualified_values(df: pl.DataFrame, spec: HighlightStat) -> pl.DataFrame:
+    """Volume-qualified finite values. Does not apply `min_value` (board-only)."""
+    if df.is_empty():
+        return df
+    built = spec.build(df)
     built = built.filter(pl.col("_value").is_not_null() & pl.col("_value").is_finite())
     if spec.volume_floor is not None:
         built = built.filter(
             pl.col("_volume").is_not_null() & (pl.col("_volume") >= spec.volume_floor)
         )
-    if built.height < MIN_PEER_N:
+    return built
+
+
+def _score_stat(
+    season_df: pl.DataFrame,
+    week_df: pl.DataFrame,
+    group: str,
+    spec: HighlightStat,
+) -> list[dict[str, Any]]:
+    """Z vs all qualified player-weeks 1..W; board rows are this week's games only."""
+    season_vals = _qualified_values(season_df, spec)
+    if season_vals.height < MIN_PEER_N:
+        return []
+    peers = season_vals["_value"].to_list()
+    week_vals = _qualified_values(week_df, spec)
+    if week_vals.is_empty():
         return []
 
-    peers = built["_value"].to_list()
     rows: list[dict[str, Any]] = []
-    for rec in built.iter_rows(named=True):
+    for rec in week_vals.iter_rows(named=True):
         val = float(rec["_value"])
         if spec.min_value is not None and val < spec.min_value:
             continue
@@ -215,37 +255,73 @@ def _score_stat(
     return rows
 
 
-def build_highlights_board(season: int, week: int) -> dict[str, Any]:
-    """Compute weekly board payload from spine (does not write)."""
+def _shape_payload(dens: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "kind": dens["kind"],
+        "xMin": dens["x_min"],
+        "xMax": dens["x_max"],
+        "yMax": dens["y_max"],
+        "curve": dens.get("curve") or [],
+    }
+    if dens.get("n_sample") is not None:
+        out["nSample"] = int(dens["n_sample"])
+    if dens.get("lower_bound") is not None:
+        out["lowerBound"] = dens["lower_bound"]
+    if dens.get("upper_bound") is not None:
+        out["upperBound"] = dens["upper_bound"]
+    return out
+
+
+def _league_weekly_group_payload(
+    season: int,
+    week: int,
+    group: str,
+    season_df: pl.DataFrame,
+    specs: list[HighlightStat],
+) -> dict[str, Any]:
+    stats: dict[str, Any] = {}
+    for spec in specs:
+        cat = _catalog_stat(group, spec.stat_id)
+        if cat is None:
+            continue
+        sample_df = _qualified_values(season_df, spec)
+        if sample_df.is_empty():
+            continue
+        sample = sample_df["_value"].to_numpy().astype(float)
+        dens = build_league_density(np.asarray(sample, dtype=float), cat)
+        stats[spec.stat_id] = _shape_payload(dens)
+    return {
+        "schemaVersion": 1,
+        "season": season,
+        "asOfWeek": week,
+        "positionGroup": group,
+        "scope": "league_weekly",
+        "stats": stats,
+    }
+
+
+def _load_spine(season: int) -> pl.DataFrame:
     path = SPINE_DIR / f"player_week_{season}.parquet"
     if not path.is_file():
         raise FileNotFoundError(f"missing spine {path}")
+    return pl.read_parquet(path)
 
-    spine = pl.read_parquet(path)
-    week_df = spine.filter(
-        (pl.col("week") == week) & pl.col("position_group").is_not_null()
+
+def _board_from_spine(spine: pl.DataFrame, season: int, week: int) -> dict[str, Any]:
+    through = spine.filter(
+        (pl.col("week") <= week) & pl.col("position_group").is_not_null()
     )
+    this_week = through.filter(pl.col("week") == week)
 
     all_rows: list[dict[str, Any]] = []
     by_group: dict[str, list[dict[str, Any]]] = {g: [] for g in HIGHLIGHT_GROUPS}
 
     for group in HIGHLIGHT_GROUPS:
-        gdf = week_df.filter(pl.col("position_group") == group)
+        season_g = through.filter(pl.col("position_group") == group)
+        week_g = this_week.filter(pl.col("position_group") == group)
         for spec in _allowlist_for_group(group):
-            # Fix higher_is_better / label from catalog for this group.
-            for s in stats_for_group(group):
-                if s.id == spec.stat_id:
-                    spec = HighlightStat(
-                        spec.stat_id,
-                        s.id.replace("_", " "),
-                        s.higher_is_better,
-                        spec.build,
-                        spec.volume_floor,
-                        spec.min_value,
-                    )
-                    break
-            scored = _score_stat(gdf, group, spec)
-            all_rows.extend(scored)
+            spec = _resolve_spec(group, spec)
+            all_rows.extend(_score_stat(season_g, week_g, group, spec))
 
     all_rows.sort(key=lambda r: r["zScore"], reverse=True)
 
@@ -279,12 +355,34 @@ def build_highlights_board(season: int, week: int) -> dict[str, Any]:
     }
 
 
-def publish_highlights(season: int, week: int) -> Path:
-    """Write `data/highlights/{season}/w{week}.json`."""
-    ensure_data_dirs()
-    payload = build_highlights_board(season, week)
-    out = HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with out.open("w", encoding="utf-8") as f:
+def build_highlights_board(season: int, week: int) -> dict[str, Any]:
+    """Compute weekly board payload from spine (does not write)."""
+    return _board_from_spine(_load_spine(season), season, week)
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
         json.dump(payload, f, **_JSON_DUMP_KW)
-    return out
+
+
+def publish_highlights(season: int, week: int) -> HighlightsPublishResult:
+    """Write board + allowlist `league_weekly` KDEs for the same week."""
+    ensure_data_dirs()
+    spine = _load_spine(season)
+    through = spine.filter(
+        (pl.col("week") <= week) & pl.col("position_group").is_not_null()
+    )
+    payload = _board_from_spine(spine, season, week)
+    board = HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
+    _write_json(board, payload)
+
+    dist_paths: list[Path] = []
+    for group in HIGHLIGHT_GROUPS:
+        season_g = through.filter(pl.col("position_group") == group)
+        specs = [_resolve_spec(group, spec) for spec in _allowlist_for_group(group)]
+        dist = _league_weekly_group_payload(season, week, group, season_g, specs)
+        out = LEAGUE_WEEKLY_DIR / str(season) / f"w{week}" / f"{group}.json"
+        _write_json(out, dist)
+        dist_paths.append(out)
+    return HighlightsPublishResult(board=board, dist_paths=dist_paths)

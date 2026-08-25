@@ -11,7 +11,15 @@ from typing import Iterable
 
 from supabase import Client, create_client
 
-from ballnet.paths import HIGHLIGHTS_DIR, INDEX_DIR, LEAGUE_DIR, PAGES_DIR, REPO_ROOT
+from ballnet.highlights import HIGHLIGHT_GROUPS
+from ballnet.paths import (
+    HIGHLIGHTS_DIR,
+    INDEX_DIR,
+    LEAGUE_DIR,
+    LEAGUE_WEEKLY_DIR,
+    PAGES_DIR,
+    REPO_ROOT,
+)
 from ballnet.publish import PUBLISHABLE_GROUPS, default_as_of_week
 
 DEFAULT_BUCKET = "knowball-public"
@@ -204,13 +212,23 @@ def upload_season_highlights(
     bucket: str = DEFAULT_BUCKET,
     **kwargs,
 ) -> UploadResult:
-    """Upload `highlights/{season}/w{week}.json` Stage H board."""
+    """Upload Stage H board + allowlist `dists/league_weekly/` curves."""
     week = as_of_week if as_of_week is not None else default_as_of_week(season)
-    local = HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
-    if not local.is_file():
-        raise FileNotFoundError(f"missing local highlights file {local}")
-    return upload_files(
-        [(f"highlights/{season}/w{week}.json", local)],
-        bucket=bucket,
-        **kwargs,
-    )
+    board = HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
+    if not board.is_file():
+        raise FileNotFoundError(f"missing local highlights file {board}")
+    pairs: list[tuple[str, Path]] = [
+        (f"highlights/{season}/w{week}.json", board),
+    ]
+    missing: list[str] = []
+    for group in HIGHLIGHT_GROUPS:
+        local = LEAGUE_WEEKLY_DIR / str(season) / f"w{week}" / f"{group}.json"
+        if not local.is_file():
+            missing.append(str(local))
+            continue
+        pairs.append(
+            (f"dists/league_weekly/{season}/w{week}/{group}.json", local),
+        )
+    if missing and len(pairs) == 1:
+        raise FileNotFoundError(f"missing league_weekly files: {missing}")
+    return upload_files(pairs, bucket=bucket, **kwargs)
