@@ -2,7 +2,7 @@
 
 Public data pipeline and football data-science engine for [Knowball](https://github.com/ehfurgeson/knowball).
 
-Ballnet ingests nflverse data, applies qualification (ramp–hold), computes league KDE densities and percentiles, and publishes JSON that Knowball renders. It is **not** the fantasy draft optimizer — that lives in private **ffoptim**.
+Ballnet ingests nflverse data, applies qualification (ramp–hold), computes league KDE densities and percentiles, and publishes JSON that Knowball renders.
 
 ## Status
 
