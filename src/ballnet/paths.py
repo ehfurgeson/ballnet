@@ -14,8 +14,19 @@ PAGES_DIR = DATA_DIR / "pages"
 INDEX_DIR = DATA_DIR / "index"
 # Knowball-facing league shapes (camelCase). Distinct from Stage D `dists/league_ytd_*`.
 LEAGUE_DIR = DATA_DIR / "league"
+# Stage H weekly boards (not Stage G).
+HIGHLIGHTS_DIR = DATA_DIR / "highlights"
 
 
 def ensure_data_dirs() -> None:
-    for d in (RAW_DIR, SPINE_DIR, YTD_DIR, DIST_DIR, PAGES_DIR, INDEX_DIR, LEAGUE_DIR):
+    for d in (
+        RAW_DIR,
+        SPINE_DIR,
+        YTD_DIR,
+        DIST_DIR,
+        PAGES_DIR,
+        INDEX_DIR,
+        LEAGUE_DIR,
+        HIGHLIGHTS_DIR,
+    ):
         d.mkdir(parents=True, exist_ok=True)

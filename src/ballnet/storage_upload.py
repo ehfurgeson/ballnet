@@ -11,7 +11,7 @@ from typing import Iterable
 
 from supabase import Client, create_client
 
-from ballnet.paths import INDEX_DIR, LEAGUE_DIR, PAGES_DIR, REPO_ROOT
+from ballnet.paths import HIGHLIGHTS_DIR, INDEX_DIR, LEAGUE_DIR, PAGES_DIR, REPO_ROOT
 from ballnet.publish import PUBLISHABLE_GROUPS, default_as_of_week
 
 DEFAULT_BUCKET = "knowball-public"
@@ -195,3 +195,22 @@ def upload_season_league(
     if missing and not pairs:
         raise FileNotFoundError(f"missing league files: {missing}")
     return upload_files(pairs, bucket=bucket, **kwargs)
+
+
+def upload_season_highlights(
+    season: int,
+    as_of_week: int | None = None,
+    *,
+    bucket: str = DEFAULT_BUCKET,
+    **kwargs,
+) -> UploadResult:
+    """Upload `highlights/{season}/w{week}.json` Stage H board."""
+    week = as_of_week if as_of_week is not None else default_as_of_week(season)
+    local = HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
+    if not local.is_file():
+        raise FileNotFoundError(f"missing local highlights file {local}")
+    return upload_files(
+        [(f"highlights/{season}/w{week}.json", local)],
+        bucket=bucket,
+        **kwargs,
+    )

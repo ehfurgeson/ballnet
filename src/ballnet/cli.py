@@ -26,9 +26,11 @@ from ballnet.publish import (
 )
 from ballnet.storage_upload import (
     upload_index,
+    upload_season_highlights,
     upload_season_league,
     upload_season_pages,
 )
+from ballnet.highlights import publish_highlights
 import polars as pl
 
 # Demo players for local visual review (2024 REG through week 18).
@@ -214,9 +216,21 @@ def main(argv: list[str] | None = None) -> None:
         help="Limit to group(s); repeatable. Default: all except returner",
     )
 
+    p_hi = sub.add_parser(
+        "highlights",
+        help="Stage H: weekly highlight board from spine → data/highlights/",
+    )
+    p_hi.add_argument("--season", type=int, required=True)
+    p_hi.add_argument(
+        "--week",
+        type=int,
+        default=None,
+        help="REG week (default: 17 before 2021, else 18)",
+    )
+
     p_up = sub.add_parser(
         "upload-storage",
-        help="Upload local index/pages/league JSON to Supabase Storage (knowball-public)",
+        help="Upload local index/pages/league/highlights JSON to Supabase Storage",
     )
     p_up.add_argument(
         "--season",
@@ -244,6 +258,16 @@ def main(argv: list[str] | None = None) -> None:
         "--league-only",
         action="store_true",
         help="With --season, upload league/ only (skip pages)",
+    )
+    p_up.add_argument(
+        "--highlights",
+        action="store_true",
+        help="Upload highlights/{season}/w{week}.json (requires --season)",
+    )
+    p_up.add_argument(
+        "--highlights-only",
+        action="store_true",
+        help="With --season, upload highlights/ only (skip pages + league)",
     )
     p_up.add_argument(
         "--also-current",
@@ -678,11 +702,37 @@ def main(argv: list[str] | None = None) -> None:
         )
         return
 
+    if args.cmd == "highlights":
+        week = args.week if args.week is not None else default_as_of_week(args.season)
+        print(f"=== highlights {args.season} w{week} ===", flush=True)
+        out = publish_highlights(args.season, week)
+        board = json.loads(out.read_text(encoding="utf-8"))
+        print(
+            json.dumps(
+                {
+                    "path": str(out),
+                    "season": board["season"],
+                    "week": board["week"],
+                    "top": len(board.get("top") or []),
+                    "groups": {
+                        g: len(rows)
+                        for g, rows in (board.get("byGroup") or {}).items()
+                    },
+                },
+                indent=2,
+            )
+        )
+        return
+
     if args.cmd == "upload-storage":
         if not args.index and args.season is None:
             raise SystemExit("Provide --index and/or --season YEAR")
         if args.pages_only and args.league_only:
             raise SystemExit("Use only one of --pages-only / --league-only")
+        if args.highlights_only and (args.pages_only or args.league_only):
+            raise SystemExit("--highlights-only cannot combine with pages/league-only")
+        if (args.highlights or args.highlights_only) and args.season is None:
+            raise SystemExit("--highlights requires --season YEAR")
         reports: list[dict] = []
         if args.index:
             print("=== upload index/ ===", flush=True)
@@ -708,8 +758,9 @@ def main(argv: list[str] | None = None) -> None:
                 if args.as_of_week is not None
                 else default_as_of_week(args.season)
             )
-            do_pages = not args.league_only
-            do_league = not args.pages_only
+            do_highlights = args.highlights or args.highlights_only
+            do_pages = not args.league_only and not args.highlights_only
+            do_league = not args.pages_only and not args.highlights_only
             if do_pages:
                 print(
                     f"=== upload pages/{args.season}/w{week}/ "
@@ -764,8 +815,34 @@ def main(argv: list[str] | None = None) -> None:
                     f"bytes={r.bytes} seconds={r.seconds:.1f}",
                     flush=True,
                 )
+            if do_highlights:
+                print(
+                    f"=== upload highlights/{args.season}/w{week}.json ===",
+                    flush=True,
+                )
+                r = upload_season_highlights(
+                    args.season,
+                    week,
+                    bucket=args.bucket,
+                    workers=args.workers,
+                )
+                reports.append(
+                    {
+                        "what": f"highlights/{args.season}/w{week}",
+                        "uploaded": r.uploaded,
+                        "failed": r.failed,
+                        "bytes": r.bytes,
+                        "seconds": round(r.seconds, 3),
+                        "errors": r.errors,
+                    }
+                )
+                print(
+                    f"  uploaded={r.uploaded} failed={r.failed} "
+                    f"bytes={r.bytes} seconds={r.seconds:.1f}",
+                    flush=True,
+                )
+        print(json.dumps({"uploads": reports}, indent=2))
         failed = sum(x["failed"] for x in reports)
-        print(json.dumps({"bucket": args.bucket, "uploads": reports}, indent=2))
         if failed:
             sys.exit(1)
         return

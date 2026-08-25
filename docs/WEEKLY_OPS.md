@@ -16,8 +16,9 @@ Intended stages inside `refresh` (not a new math path — wrap what already exis
 2. **B** `spine --season YEAR`
 3. **C–E** for every publishable group at `as-of-week W` (ytd → densities → percentiles)
 4. **G** `publish-all --season YEAR --as-of-week W` (scalar pages + league KDE + index/current)
-5. Optional: `--sync-knowball` for the search index copy into Knowball
-6. Optional: `--upload` → `upload-storage --index --season YEAR` (pages + league)
+5. **H** `highlights --season YEAR --week W` (weekly z-score board → `data/highlights/`)
+6. Optional: `--sync-knowball` for the search index copy into Knowball
+7. Optional: `--upload` → `upload-storage --index --season YEAR --highlights` (pages + league + highlights)
 
 Until `refresh` exists, run that sequence manually (see below).
 
@@ -34,7 +35,8 @@ uv run ballnet fetch --season $YEAR
 uv run ballnet spine --season $YEAR
 uv run ballnet publish-all --season $YEAR --as-of-week $W \
   --sync-knowball ../knowball/web
-uv run ballnet upload-storage --index --season $YEAR
+uv run ballnet highlights --season $YEAR --week $W
+uv run ballnet upload-storage --index --season $YEAR --highlights
 ```
 
 `publish-all` without `--skip-pipeline` already runs C–E then G for all groups.
