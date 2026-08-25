@@ -38,4 +38,3 @@ uv run ballnet publish-range --start 2016 --end 2025 --sync-knowball ../knowball
 
 Parquet lands under gitignored `data/raw/`, `data/spine/`, `data/ytd/`, `data/dists/`. Page JSON under `data/pages/`; league under `data/league/`; search under `data/index/`.
 
-Python 3.12+. Secrets (`.env`, `*.pem`) stay local. Raw extracts are local-only; published viz JSON is the public surface.
