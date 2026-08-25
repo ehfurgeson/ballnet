@@ -1,16 +1,10 @@
 # Ballnet
 
-Public data pipeline and football data-science engine for [Knowball](https://github.com/ehfurgeson/knowball).
+Football data pipeline for [Knowball](https://github.com/ehfurgeson/knowball).
 
-Ballnet ingests nflverse data, applies qualification (ramp–hold), computes league KDE densities and percentiles, and publishes JSON that Knowball renders.
+Ballnet ingests [nflverse](https://github.com/nflverse) data, qualifies players, estimates league distributions with kernel density estimation, computes oriented percentiles, and publishes JSON that Knowball renders. Coverage spans the NGS era (2016–present).
 
-## Status
-
-Stages **A–G** are implemented for all catalog position groups. Full local publish covers **2016–2025** season-end slices (~5412 players in the merged index). League shapes are **KDE-only**. Public JSON lives on Supabase Storage (`knowball-public`).
-
-**Agents:** read [`docs/HANDOFF.md`](docs/HANDOFF.md). Weekly refresh: [`docs/WEEKLY_OPS.md`](docs/WEEKLY_OPS.md).
-
-Contract: knowball `.plans/ballnet-etl-knowball-visualizations.md`.
+**Stack:** Python · uv · Polars/pandas · scikit-learn · Supabase Storage
 
 ## Setup
 
@@ -21,20 +15,23 @@ uv sync
 ## Pipeline
 
 ```bash
-uv sync
-
-# NGS-era backfill (fetch + spine for each season)
+# Backfill raw + weekly spine
 uv run ballnet backfill --start 2016 --end 2025
 
-# One season, every player + index (+ C–E unless --skip-pipeline)
-uv run ballnet publish-all --season 2025 --as-of-week 18 --sync-knowball ../knowball/web
+# Publish one season (players, index, densities, percentiles)
+uv run ballnet publish-all --season 2025 --as-of-week 18
 
-# Upload index + that season's pages + league curves
+# Multi-season publish + merged search index
+uv run ballnet publish-range --start 2016 --end 2025
+
+# Upload to Supabase Storage
 uv run ballnet upload-storage --index --season 2025
-
-# Full multi-season publish (week 17 before 2021, else 18) + merged index
-uv run ballnet publish-range --start 2016 --end 2025 --sync-knowball ../knowball/web
 ```
 
-Parquet lands under gitignored `data/raw/`, `data/spine/`, `data/ytd/`, `data/dists/`. Page JSON under `data/pages/`; league under `data/league/`; search under `data/index/`.
+Artifacts land under gitignored `data/` (`raw/`, `spine/`, `ytd/`, `dists/`, `pages/`, `league/`, `index/`).
 
+Weekly refresh notes: [`docs/WEEKLY_OPS.md`](docs/WEEKLY_OPS.md).
+
+## Related
+
+- [knowball](https://github.com/ehfurgeson/knowball) — Next.js visualization site
