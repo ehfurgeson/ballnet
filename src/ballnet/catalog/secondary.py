@@ -5,39 +5,30 @@ from __future__ import annotations
 from ballnet.catalog.types import StatDefinition
 
 SECONDARY_STATS: list[StatDefinition] = [
-    StatDefinition("interceptions", "discrete", True, "count", 0, 4, 1, "games", 1999, bin_width=1),
     StatDefinition(
-        "passes_defended", "discrete", True, "count", 0, 6, 1, "games", 1999, bin_width=1
-    ),
-    StatDefinition(
-        "targets_allowed", "discrete", False, "count", 0, 18, 2, "targets_allowed", 2018, bin_width=1
-    ),
-    StatDefinition(
-        "completions_allowed",
-        "discrete",
-        False,
-        "count",
-        0,
-        15,
-        2,
-        "targets_allowed",
-        2018,
-        bin_width=1,
-    ),
-    StatDefinition(
-        "receiving_yards_allowed",
+        "rating_allowed",
         "continuous",
         False,
-        "yards",
+        "rating",
         0,
-        250,
-        2,
+        158.3,
+        4,
         "targets_allowed",
         2018,
         lower_bound=0,
+        upper_bound=158.3,
     ),
     StatDefinition(
-        "tds_allowed", "discrete", False, "count", 0, 3, 2, "targets_allowed", 2018, bin_width=1
+        "yards_per_target_allowed",
+        "continuous",
+        False,
+        "one_decimal",
+        0,
+        20,
+        4,
+        "targets_allowed",
+        2018,
+        lower_bound=0,
     ),
     StatDefinition(
         "completion_pct_allowed",
@@ -53,17 +44,17 @@ SECONDARY_STATS: list[StatDefinition] = [
         upper_bound=1,
     ),
     StatDefinition(
-        "rating_allowed",
+        "td_rate_allowed",
         "continuous",
         False,
-        "rating",
+        "percent",
         0,
-        158.3,
+        1,
         4,
         "targets_allowed",
         2018,
         lower_bound=0,
-        upper_bound=158.3,
+        upper_bound=1,
     ),
     StatDefinition(
         "adot_allowed",
@@ -78,10 +69,57 @@ SECONDARY_STATS: list[StatDefinition] = [
         lower_bound=0,
     ),
     StatDefinition(
-        "tackles_combined", "discrete", True, "count", 0, 16, 1, "games", 1999, bin_width=1
+        "tds_allowed", "discrete", False, "count", 0, 3, 2, "targets_allowed", 2018, bin_width=1
+    ),
+    StatDefinition(
+        "receiving_yards_allowed",
+        "continuous",
+        False,
+        "yards",
+        0,
+        250,
+        2,
+        "targets_allowed",
+        2018,
+        lower_bound=0,
+    ),
+    StatDefinition(
+        "completions_allowed",
+        "discrete",
+        False,
+        "count",
+        0,
+        15,
+        2,
+        "targets_allowed",
+        2018,
+        bin_width=1,
+    ),
+    StatDefinition(
+        "targets_allowed", "discrete", False, "count", 0, 18, 2, "targets_allowed", 2018, bin_width=1
+    ),
+    StatDefinition("interceptions", "discrete", True, "count", 0, 4, 1, "games", 1999, bin_width=1),
+    StatDefinition(
+        "passes_defended", "discrete", True, "count", 0, 6, 1, "games", 1999, bin_width=1
+    ),
+    StatDefinition(
+        "missed_tackle_rate",
+        "continuous",
+        False,
+        "percent",
+        0,
+        1,
+        1,
+        "tackle_chances",
+        2018,
+        lower_bound=0,
+        upper_bound=1,
     ),
     StatDefinition(
         "missed_tackles", "discrete", False, "count", 0, 7, 1, "games", 2018, bin_width=1
+    ),
+    StatDefinition(
+        "tackles_combined", "discrete", True, "count", 0, 16, 1, "games", 1999, bin_width=1
     ),
     StatDefinition(
         "defensive_snap_pct",

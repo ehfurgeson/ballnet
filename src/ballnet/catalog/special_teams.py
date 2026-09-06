@@ -27,16 +27,67 @@ KICKER_STATS: list[StatDefinition] = [
 ]
 
 PUNTER_STATS: list[StatDefinition] = [
-    StatDefinition("punts", "discrete", True, "count", 0, 16, 2, "punts", 1999, bin_width=1),
-    StatDefinition(
-        "gross_punt_yards", "continuous", True, "yards", 0, 685, 2, "punts", 1999, lower_bound=0
-    ),
     StatDefinition(
         "net_punt_yards", "continuous", True, "yards", 0, 600, 2, "punts", 1999, lower_bound=0
     ),
+    StatDefinition(
+        "inside_20_rate",
+        "continuous",
+        True,
+        "percent",
+        0,
+        1,
+        2,
+        "punts",
+        1999,
+        lower_bound=0,
+        upper_bound=1,
+    ),
+    StatDefinition(
+        "touchback_rate",
+        "continuous",
+        False,
+        "percent",
+        0,
+        1,
+        2,
+        "punts",
+        1999,
+        lower_bound=0,
+        upper_bound=1,
+    ),
+    StatDefinition(
+        "fair_catch_rate",
+        "continuous",
+        True,
+        "percent",
+        0,
+        1,
+        2,
+        "punts",
+        1999,
+        lower_bound=0,
+        upper_bound=1,
+    ),
+    StatDefinition(
+        "gross_to_net_loss",
+        "continuous",
+        False,
+        "one_decimal",
+        0,
+        15,
+        2,
+        "punts",
+        1999,
+        lower_bound=0,
+    ),
+    StatDefinition(
+        "gross_punt_yards", "continuous", True, "yards", 0, 685, 2, "punts", 1999, lower_bound=0
+    ),
     StatDefinition("inside_20", "discrete", True, "count", 0, 8, 2, "punts", 1999, bin_width=1),
-    StatDefinition("touchbacks", "discrete", False, "count", 0, 6, 2, "punts", 1999, bin_width=1),
     StatDefinition("fair_catches", "discrete", True, "count", 0, 8, 2, "punts", 1999, bin_width=1),
+    StatDefinition("touchbacks", "discrete", False, "count", 0, 6, 2, "punts", 1999, bin_width=1),
+    StatDefinition("punts", "discrete", True, "count", 0, 16, 2, "punts", 1999, bin_width=1),
 ]
 
 RETURNER_STATS: list[StatDefinition] = [

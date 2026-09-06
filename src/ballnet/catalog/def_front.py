@@ -5,21 +5,34 @@ from __future__ import annotations
 from ballnet.catalog.types import StatDefinition
 
 DEF_FRONT_STATS: list[StatDefinition] = [
-    StatDefinition("tackles_solo", "discrete", True, "count", 0, 16, 1, "games", 1999, bin_width=1),
-    StatDefinition("tackles_ast", "discrete", True, "count", 0, 12, 1, "games", 1999, bin_width=1),
-    StatDefinition(
-        "tackles_combined", "discrete", True, "count", 0, 24, 1, "games", 1999, bin_width=1
-    ),
-    StatDefinition(
-        "missed_tackles", "discrete", False, "count", 0, 7, 1, "games", 2018, bin_width=1
-    ),
+    StatDefinition("pressures", "discrete", True, "count", 0, 15, 1, "games", 2018, bin_width=1),
+    StatDefinition("qb_hits", "discrete", True, "count", 0, 12, 1, "games", 1999, bin_width=1),
+    StatDefinition("hurries", "discrete", True, "count", 0, 10, 1, "games", 2018, bin_width=1),
     StatDefinition("sacks", "discrete", True, "one_decimal", 0, 7, 1, "games", 1999, bin_width=0.5),
     StatDefinition(
         "tackles_for_loss", "discrete", True, "count", 0, 6, 1, "games", 1999, bin_width=1
     ),
-    StatDefinition("qb_hits", "discrete", True, "count", 0, 12, 1, "games", 1999, bin_width=1),
-    StatDefinition("pressures", "discrete", True, "count", 0, 15, 1, "games", 2018, bin_width=1),
-    StatDefinition("hurries", "discrete", True, "count", 0, 10, 1, "games", 2018, bin_width=1),
+    StatDefinition(
+        "missed_tackle_rate",
+        "continuous",
+        False,
+        "percent",
+        0,
+        1,
+        1,
+        "tackle_chances",
+        2018,
+        lower_bound=0,
+        upper_bound=1,
+    ),
+    StatDefinition(
+        "missed_tackles", "discrete", False, "count", 0, 7, 1, "games", 2018, bin_width=1
+    ),
+    StatDefinition(
+        "tackles_combined", "discrete", True, "count", 0, 24, 1, "games", 1999, bin_width=1
+    ),
+    StatDefinition("tackles_solo", "discrete", True, "count", 0, 16, 1, "games", 1999, bin_width=1),
+    StatDefinition("tackles_ast", "discrete", True, "count", 0, 12, 1, "games", 1999, bin_width=1),
     StatDefinition(
         "forced_fumbles", "discrete", True, "count", 0, 4, 1, "games", 1999, bin_width=1
     ),

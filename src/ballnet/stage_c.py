@@ -229,10 +229,33 @@ def _aggregate_qb_wide(panel: pl.DataFrame) -> pl.DataFrame:
         *_snap_off_aggs(),
     )
     return agg.with_columns(
+        (pl.col("attempts").fill_null(0) + pl.col("sacks_taken").fill_null(0)).alias("dropbacks"),
         pl.when(pl.col("attempts") > 0)
         .then(pl.col("completions") / pl.col("attempts"))
         .otherwise(None)
         .alias("completion_pct"),
+        pl.when((pl.col("attempts").fill_null(0) + pl.col("sacks_taken").fill_null(0)) > 0)
+        .then(
+            pl.col("passing_epa")
+            / (pl.col("attempts").fill_null(0) + pl.col("sacks_taken").fill_null(0))
+        )
+        .otherwise(None)
+        .alias("epa_per_dropback"),
+        pl.when(pl.col("attempts") > 0)
+        .then(pl.col("passing_tds") / pl.col("attempts"))
+        .otherwise(None)
+        .alias("passing_td_rate"),
+        pl.when(pl.col("attempts") > 0)
+        .then(pl.col("interceptions") / pl.col("attempts"))
+        .otherwise(None)
+        .alias("interception_rate"),
+        pl.when((pl.col("attempts").fill_null(0) + pl.col("sacks_taken").fill_null(0)) > 0)
+        .then(
+            pl.col("sacks_taken")
+            / (pl.col("attempts").fill_null(0) + pl.col("sacks_taken").fill_null(0))
+        )
+        .otherwise(None)
+        .alias("sack_rate"),
         pl.when(pl.col("passing_air_yards") > 0)
         .then(pl.col("passing_yards") / pl.col("passing_air_yards"))
         .otherwise(None)
@@ -287,6 +310,18 @@ def _aggregate_backfield_wide(panel: pl.DataFrame) -> pl.DataFrame:
         pl.col("pfr_rush_rushing_broken_tackles").sum().alias("broken_tackles"),
         pl.col("pfr_rush_rushing_yards_after_contact").sum().alias("yards_after_contact"),
         pl.col("pfr_rush_rushing_broken_tackles").drop_nulls().len().alias("pfr_rush_weeks"),
+        (
+            pl.when(
+                pl.col("ngs_rush_rush_yards_over_expected_per_att").is_not_null()
+                & pl.col("ngs_rush_rush_attempts").is_not_null()
+            )
+            .then(
+                pl.col("ngs_rush_rush_yards_over_expected_per_att")
+                * pl.col("ngs_rush_rush_attempts")
+            )
+            .otherwise(None)
+            .sum()
+        ).alias("ryoe_total"),
         pl.col("targets").sum().alias("targets"),
         pl.col("receptions").sum().alias("receptions"),
         pl.col("receiving_yards").sum().alias("receiving_yards"),
@@ -313,6 +348,18 @@ def _aggregate_backfield_wide(panel: pl.DataFrame) -> pl.DataFrame:
         .then(pl.col("rushing_yards") / pl.col("carries"))
         .otherwise(None)
         .alias("yards_per_carry"),
+        pl.when(pl.col("carries") > 0)
+        .then(pl.col("rushing_epa") / pl.col("carries"))
+        .otherwise(None)
+        .alias("epa_per_rush"),
+        pl.when(pl.col("carries") > 0)
+        .then(pl.col("yards_after_contact") / pl.col("carries"))
+        .otherwise(None)
+        .alias("yac_per_carry"),
+        pl.when(pl.col("carries") > 0)
+        .then(pl.col("broken_tackles") / pl.col("carries"))
+        .otherwise(None)
+        .alias("broken_tackle_rate"),
         pl.col("ngs_rush_avg_time_to_los_ytd").alias("time_to_los"),
         pl.col("ngs_rush_rush_yards_over_expected_per_att_ytd").alias("ryoe"),
         pl.col("ngs_rush_percent_attempts_gte_eight_defenders_ytd").alias(
@@ -358,6 +405,22 @@ def _aggregate_pass_catcher_wide(panel: pl.DataFrame) -> pl.DataFrame:
         .then(pl.col("receptions") / pl.col("targets"))
         .otherwise(None)
         .alias("catch_pct"),
+        pl.when(pl.col("targets") > 0)
+        .then(pl.col("receiving_epa") / pl.col("targets"))
+        .otherwise(None)
+        .alias("epa_per_target"),
+        pl.when(pl.col("targets") > 0)
+        .then(pl.col("receiving_yards") / pl.col("targets"))
+        .otherwise(None)
+        .alias("yards_per_target"),
+        pl.when(pl.col("targets") > 0)
+        .then(pl.col("receiving_tds") / pl.col("targets"))
+        .otherwise(None)
+        .alias("receiving_td_rate"),
+        pl.when(pl.col("targets") > 0)
+        .then(pl.col("drops") / pl.col("targets"))
+        .otherwise(None)
+        .alias("drop_rate"),
         pl.when(pl.col("targets") > 0)
         .then(pl.col("receiving_air_yards") / pl.col("targets"))
         .otherwise(None)
@@ -420,6 +483,21 @@ def _aggregate_def_front_wide(panel: pl.DataFrame) -> pl.DataFrame:
         *_snap_def_aggs(),
     )
     return agg.with_columns(
+        # Denom only when PFR miss data exists — do not treat null misses as 0 chances.
+        pl.when(pl.col("missed_tackles").is_not_null())
+        .then(pl.col("tackles_combined").fill_null(0) + pl.col("missed_tackles"))
+        .otherwise(None)
+        .alias("tackle_chances"),
+        pl.when(
+            pl.col("missed_tackles").is_not_null()
+            & ((pl.col("tackles_combined").fill_null(0) + pl.col("missed_tackles")) > 0)
+        )
+        .then(
+            pl.col("missed_tackles")
+            / (pl.col("tackles_combined").fill_null(0) + pl.col("missed_tackles"))
+        )
+        .otherwise(None)
+        .alias("missed_tackle_rate"),
         pl.when(pl.col("team_defense_snaps") > 0)
         .then(pl.col("defense_snaps") / pl.col("team_defense_snaps"))
         .otherwise(None)
@@ -451,10 +529,33 @@ def _aggregate_secondary_wide(panel: pl.DataFrame) -> pl.DataFrame:
         *_snap_def_aggs(),
     )
     return agg.with_columns(
+        # Denom only when PFR miss data exists — do not treat null misses as 0 chances.
+        pl.when(pl.col("missed_tackles").is_not_null())
+        .then(pl.col("tackles_combined").fill_null(0) + pl.col("missed_tackles"))
+        .otherwise(None)
+        .alias("tackle_chances"),
+        pl.when(
+            pl.col("missed_tackles").is_not_null()
+            & ((pl.col("tackles_combined").fill_null(0) + pl.col("missed_tackles")) > 0)
+        )
+        .then(
+            pl.col("missed_tackles")
+            / (pl.col("tackles_combined").fill_null(0) + pl.col("missed_tackles"))
+        )
+        .otherwise(None)
+        .alias("missed_tackle_rate"),
         pl.when(pl.col("targets_allowed") > 0)
         .then(pl.col("completions_allowed") / pl.col("targets_allowed"))
         .otherwise(None)
         .alias("completion_pct_allowed"),
+        pl.when(pl.col("targets_allowed") > 0)
+        .then(pl.col("receiving_yards_allowed") / pl.col("targets_allowed"))
+        .otherwise(None)
+        .alias("yards_per_target_allowed"),
+        pl.when(pl.col("targets_allowed") > 0)
+        .then(pl.col("tds_allowed") / pl.col("targets_allowed"))
+        .otherwise(None)
+        .alias("td_rate_allowed"),
         pl.when(pl.col("team_defense_snaps") > 0)
         .then(pl.col("defense_snaps") / pl.col("team_defense_snaps"))
         .otherwise(None)
@@ -493,7 +594,24 @@ def _aggregate_punter_wide(panel: pl.DataFrame) -> pl.DataFrame:
         pl.col("pt_touchback").sum().alias("touchbacks"),
         pl.col("pt_fair_caught").sum().alias("fair_catches"),
     )
-    return agg
+    return agg.with_columns(
+        pl.when(pl.col("punts") > 0)
+        .then(pl.col("inside_20") / pl.col("punts"))
+        .otherwise(None)
+        .alias("inside_20_rate"),
+        pl.when(pl.col("punts") > 0)
+        .then(pl.col("touchbacks") / pl.col("punts"))
+        .otherwise(None)
+        .alias("touchback_rate"),
+        pl.when(pl.col("punts") > 0)
+        .then(pl.col("fair_catches") / pl.col("punts"))
+        .otherwise(None)
+        .alias("fair_catch_rate"),
+        pl.when(pl.col("punts") > 0)
+        .then((pl.col("gross_punt_yards") - pl.col("net_punt_yards")) / pl.col("punts"))
+        .otherwise(None)
+        .alias("gross_to_net_loss"),
+    )
 
 
 def _aggregate_returner_wide(panel: pl.DataFrame) -> pl.DataFrame:
@@ -559,7 +677,14 @@ def _source_present(stat_id: str, row: dict, position_group: str) -> bool:
     if stat_id in ngs_pass:
         return (row.get("ngs_weeks") or 0) > 0 and row.get(stat_id) is not None
 
-    ngs_rush = {"time_to_los", "ryoe", "eight_plus_defenders_pct", "ngs_efficiency", "expected_rush_yards"}
+    ngs_rush = {
+        "time_to_los",
+        "ryoe",
+        "ryoe_total",
+        "eight_plus_defenders_pct",
+        "ngs_efficiency",
+        "expected_rush_yards",
+    }
     if stat_id in ngs_rush:
         return (row.get("ngs_rush_weeks") or 0) > 0 and row.get(stat_id) is not None
 
@@ -575,13 +700,14 @@ def _source_present(stat_id: str, row: dict, position_group: str) -> bool:
     if stat_id == "racr":
         return (row.get("receiving_air_yards") or 0) > 0 and row.get("racr") is not None
 
-    if stat_id in {"broken_tackles", "yards_after_contact"}:
+    if stat_id in {"broken_tackles", "yards_after_contact", "yac_per_carry", "broken_tackle_rate"}:
         return (row.get("pfr_rush_weeks") or 0) > 0 and row.get(stat_id) is not None
-    if stat_id == "drops":
+    if stat_id in {"drops", "drop_rate"}:
         return (row.get("pfr_rec_weeks") or 0) > 0 and row.get(stat_id) is not None
 
     pfr_def = {
         "missed_tackles",
+        "missed_tackle_rate",
         "pressures",
         "hurries",
         "targets_allowed",
@@ -589,6 +715,8 @@ def _source_present(stat_id: str, row: dict, position_group: str) -> bool:
         "receiving_yards_allowed",
         "tds_allowed",
         "completion_pct_allowed",
+        "yards_per_target_allowed",
+        "td_rate_allowed",
         "rating_allowed",
         "adot_allowed",
     }

@@ -5,47 +5,45 @@ from __future__ import annotations
 from ballnet.catalog.types import StatDefinition
 
 BACKFIELD_STATS: list[StatDefinition] = [
-    StatDefinition("rush_attempts", "discrete", True, "count", 0, 45, 5, "carries", 1999, bin_width=1),
     StatDefinition(
-        "rushing_yards", "continuous", True, "yards", -15, 296, 5, "carries", 1999, lower_bound=0
-    ),
-    StatDefinition(
-        "rushing_tds", "discrete", True, "count", 0, 6, 1, "games_with_carries", 1999, bin_width=1
-    ),
-    StatDefinition("yards_per_carry", "continuous", True, "two_decimal", -5, 20, 5, "carries", 1999),
-    StatDefinition("rushing_epa", "continuous", True, "one_decimal", -20, 20, 5, "carries", 1999),
-    StatDefinition("fumbles", "discrete", False, "count", 0, 7, 1, "touches", 1999, bin_width=1),
-    StatDefinition(
-        "broken_tackles", "discrete", True, "count", 0, 16, 5, "carries", 2018, bin_width=1
-    ),
-    StatDefinition(
-        "yards_after_contact", "continuous", True, "yards", 0, 175, 5, "carries", 2018, lower_bound=0
-    ),
-    StatDefinition(
-        "time_to_los",
-        "continuous",
-        False,
-        "seconds",
-        1.5,
-        5,
-        1,
-        "ngs_rush_weeks",
-        2016,
-        lower_bound=1.5,
+        "epa_per_rush", "continuous", True, "two_decimal", -1.5, 1.5, 5, "carries", 1999
     ),
     StatDefinition("ryoe", "continuous", True, "one_decimal", -10, 15, 1, "ngs_rush_weeks", 2016),
+    StatDefinition("rushing_epa", "continuous", True, "one_decimal", -20, 20, 5, "carries", 1999),
     StatDefinition(
-        "eight_plus_defenders_pct",
+        "ryoe_total", "continuous", True, "one_decimal", -50, 80, 1, "ngs_rush_weeks", 2016
+    ),
+    StatDefinition("yards_per_carry", "continuous", True, "two_decimal", -5, 20, 5, "carries", 1999),
+    StatDefinition(
+        "yac_per_carry",
+        "continuous",
+        True,
+        "one_decimal",
+        0,
+        8,
+        5,
+        "carries",
+        2018,
+        lower_bound=0,
+    ),
+    StatDefinition(
+        "broken_tackle_rate",
         "continuous",
         True,
         "percent",
         0,
         1,
-        1,
-        "ngs_rush_weeks",
-        2016,
+        5,
+        "carries",
+        2018,
         lower_bound=0,
         upper_bound=1,
+    ),
+    StatDefinition(
+        "yards_after_contact", "continuous", True, "yards", 0, 175, 5, "carries", 2018, lower_bound=0
+    ),
+    StatDefinition(
+        "broken_tackles", "discrete", True, "count", 0, 16, 5, "carries", 2018, bin_width=1
     ),
     StatDefinition(
         "ngs_efficiency", "continuous", True, "ratio", 0, 8, 1, "ngs_rush_weeks", 2016, lower_bound=0
@@ -61,6 +59,39 @@ BACKFIELD_STATS: list[StatDefinition] = [
         "ngs_rush_weeks",
         2016,
         lower_bound=0,
+    ),
+    StatDefinition(
+        "time_to_los",
+        "continuous",
+        False,
+        "seconds",
+        1.5,
+        5,
+        1,
+        "ngs_rush_weeks",
+        2016,
+        lower_bound=1.5,
+    ),
+    StatDefinition(
+        "eight_plus_defenders_pct",
+        "continuous",
+        True,
+        "percent",
+        0,
+        1,
+        1,
+        "ngs_rush_weeks",
+        2016,
+        lower_bound=0,
+        upper_bound=1,
+    ),
+    StatDefinition(
+        "rushing_tds", "discrete", True, "count", 0, 6, 1, "games_with_carries", 1999, bin_width=1
+    ),
+    StatDefinition("fumbles", "discrete", False, "count", 0, 7, 1, "touches", 1999, bin_width=1),
+    StatDefinition("rush_attempts", "discrete", True, "count", 0, 45, 5, "carries", 1999, bin_width=1),
+    StatDefinition(
+        "rushing_yards", "continuous", True, "yards", -15, 296, 5, "carries", 1999, lower_bound=0
     ),
     StatDefinition("targets", "discrete", True, "count", 0, 15, 2, "targets", 1999, bin_width=1),
     StatDefinition("receptions", "discrete", True, "count", 0, 12, 2, "targets", 1999, bin_width=1),

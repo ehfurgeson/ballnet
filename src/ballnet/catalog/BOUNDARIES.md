@@ -15,6 +15,7 @@
 
 - Invent slider rows that knowball does not list.
 - Impute 0 for missing NGS/PFR/snap sources via catalog defaults.
+- Derived rates are ratio-of-sums on the wide panel; emit `None` when the denominator is 0.
 
 ## Silent Failures & Gotchas
 
