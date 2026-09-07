@@ -65,6 +65,76 @@ def _safe_join(
     return out
 
 
+def _fill_snaps_by_name(spine: pl.DataFrame, snaps_raw: pl.DataFrame) -> pl.DataFrame:
+    """Coalesce snap_* for rows still null after the PFR-id join (common for OL)."""
+    if "player_display_name" not in spine.columns or "team" not in spine.columns:
+        return spine
+    if "player" not in snaps_raw.columns or "offense_snaps" not in snaps_raw.columns:
+        return spine
+
+    cols: list[pl.Expr] = [
+        pl.col("player").alias("player_display_name"),
+        pl.col("team"),
+        pl.col("season"),
+        pl.col("week"),
+        pl.col("offense_snaps").alias("_snap_fb_offense_snaps"),
+    ]
+    if "pfr_player_id" in snaps_raw.columns:
+        cols.append(pl.col("pfr_player_id").alias("_snap_fb_pfr"))
+    else:
+        cols.append(pl.lit(None).cast(pl.Utf8).alias("_snap_fb_pfr"))
+    for src, dst in (
+        ("offense_pct", "_snap_fb_offense_pct"),
+        ("defense_snaps", "_snap_fb_defense_snaps"),
+        ("defense_pct", "_snap_fb_defense_pct"),
+    ):
+        if src in snaps_raw.columns:
+            cols.append(pl.col(src).alias(dst))
+        else:
+            cols.append(pl.lit(None).cast(pl.Float64).alias(dst))
+
+    fb = snaps_raw.select(cols).unique(
+        subset=["player_display_name", "team", "season", "week"], keep="first"
+    )
+    before = spine.height
+    out = spine.join(
+        fb, on=["player_display_name", "team", "season", "week"], how="left"
+    )
+    assert out.height == before, "snap name fallback join exploded rows"
+
+    coalesced: list[pl.Expr] = []
+    for primary, fallback in (
+        ("snap_offense_snaps", "_snap_fb_offense_snaps"),
+        ("snap_offense_pct", "_snap_fb_offense_pct"),
+        ("snap_defense_snaps", "_snap_fb_defense_snaps"),
+        ("snap_defense_pct", "_snap_fb_defense_pct"),
+    ):
+        if primary in out.columns:
+            coalesced.append(pl.coalesce([pl.col(primary), pl.col(fallback)]).alias(primary))
+        else:
+            coalesced.append(pl.col(fallback).alias(primary))
+    if "pfr_player_id" in out.columns:
+        coalesced.append(
+            pl.coalesce([pl.col("pfr_player_id"), pl.col("_snap_fb_pfr")]).alias(
+                "pfr_player_id"
+            )
+        )
+    else:
+        coalesced.append(pl.col("_snap_fb_pfr").alias("pfr_player_id"))
+
+    drop_cols = [
+        c
+        for c in (
+            "_snap_fb_pfr",
+            "_snap_fb_offense_snaps",
+            "_snap_fb_offense_pct",
+            "_snap_fb_defense_snaps",
+            "_snap_fb_defense_pct",
+        )
+        if c in out.columns
+    ]
+    return out.with_columns(coalesced).drop(drop_cols)
+
 def build_spine(season: int) -> SpineResult:
     """One row per (player_id, season, week) with box + NGS + snaps + PFR + opportunity."""
     ensure_data_dirs()
@@ -101,13 +171,15 @@ def build_spine(season: int) -> SpineResult:
         spine = _safe_join(spine, ngs, ["player_id", "season", "week"], f"NGS {st}")
 
     # Snaps on PFR id + season + week
-    snaps = pl.read_parquet(RAW_DIR / f"snap_counts_{season}.parquet")
-    snaps = _as_i32(snaps, "season", "week")
+    snaps_raw = pl.read_parquet(RAW_DIR / f"snap_counts_{season}.parquet")
+    snaps_raw = _as_i32(snaps_raw, "season", "week")
     snap_keep = {"pfr_player_id", "season", "week"}
-    if "pfr_player_id" in snaps.columns:
-        snaps = _prefix(snaps, "snap_", snap_keep)
+    if "pfr_player_id" in snaps_raw.columns:
+        snaps = _prefix(snaps_raw, "snap_", snap_keep)
         spine = _safe_join(spine, snaps, ["pfr_player_id", "season", "week"], "snap")
 
+    # OL (and other) rows often lack pfr_id in ff_playerids — fill snaps by name+team+week.
+    spine = _fill_snaps_by_name(spine, snaps_raw)
     # PFR advanced
     for st, pref in (("pass", "pfr_pass_"), ("rush", "pfr_rush_"), ("rec", "pfr_rec_"), ("def", "pfr_def_")):
         pfr = pl.read_parquet(RAW_DIR / f"pfr_{st}_{season}.parquet")
