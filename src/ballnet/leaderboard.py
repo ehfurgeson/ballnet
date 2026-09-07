@@ -73,6 +73,7 @@ def build_leaderboard_payload(
                 continue
             value = rec.get("player_value")
             pct = rec.get("percentile")
+            denom = rec.get("denom_ytd")
             stats_out[sid].append(
                 {
                     "playerId": rec["player_id"],
@@ -81,6 +82,7 @@ def build_leaderboard_payload(
                     "team": rec.get("team") or "",
                     "value": float(value) if value is not None else None,
                     "percentile": float(pct) if pct is not None else None,
+                    "denomYtd": float(denom) if denom is not None else None,
                     "qualified": bool(rec.get("qualified")),
                 }
             )
