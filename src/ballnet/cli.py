@@ -27,6 +27,7 @@ from ballnet.publish import (
 from ballnet.storage_upload import (
     upload_index,
     upload_season_highlights,
+    upload_season_leaderboards,
     upload_season_league,
     upload_season_pages,
 )
@@ -230,7 +231,7 @@ def main(argv: list[str] | None = None) -> None:
 
     p_up = sub.add_parser(
         "upload-storage",
-        help="Upload local index/pages/league/highlights JSON to Supabase Storage",
+        help="Upload local index/pages/league/leaderboards/highlights JSON to Supabase Storage",
     )
     p_up.add_argument(
         "--season",
@@ -252,12 +253,17 @@ def main(argv: list[str] | None = None) -> None:
     p_up.add_argument(
         "--pages-only",
         action="store_true",
-        help="With --season, upload pages only (skip league/)",
+        help="With --season, upload pages only (skip league/ + leaderboards/)",
     )
     p_up.add_argument(
         "--league-only",
         action="store_true",
-        help="With --season, upload league/ only (skip pages)",
+        help="With --season, upload league/ only (skip pages + leaderboards)",
+    )
+    p_up.add_argument(
+        "--leaderboards-only",
+        action="store_true",
+        help="With --season, upload leaderboards/ only (skip pages + league)",
     )
     p_up.add_argument(
         "--highlights",
@@ -267,7 +273,7 @@ def main(argv: list[str] | None = None) -> None:
     p_up.add_argument(
         "--highlights-only",
         action="store_true",
-        help="With --season, upload highlights + league_weekly only (skip pages + league)",
+        help="With --season, upload highlights + league_weekly only (skip pages + league + leaderboards)",
     )
     p_up.add_argument(
         "--also-current",
@@ -728,10 +734,17 @@ def main(argv: list[str] | None = None) -> None:
     if args.cmd == "upload-storage":
         if not args.index and args.season is None:
             raise SystemExit("Provide --index and/or --season YEAR")
-        if args.pages_only and args.league_only:
-            raise SystemExit("Use only one of --pages-only / --league-only")
-        if args.highlights_only and (args.pages_only or args.league_only):
-            raise SystemExit("--highlights-only cannot combine with pages/league-only")
+        exclusives = [
+            args.pages_only,
+            args.league_only,
+            args.leaderboards_only,
+            args.highlights_only,
+        ]
+        if sum(1 for x in exclusives if x) > 1:
+            raise SystemExit(
+                "Use only one of --pages-only / --league-only / "
+                "--leaderboards-only / --highlights-only"
+            )
         if (args.highlights or args.highlights_only) and args.season is None:
             raise SystemExit("--highlights requires --season YEAR")
         reports: list[dict] = []
@@ -760,8 +773,21 @@ def main(argv: list[str] | None = None) -> None:
                 else default_as_of_week(args.season)
             )
             do_highlights = args.highlights or args.highlights_only
-            do_pages = not args.league_only and not args.highlights_only
-            do_league = not args.pages_only and not args.highlights_only
+            do_pages = (
+                not args.league_only
+                and not args.highlights_only
+                and not args.leaderboards_only
+            )
+            do_league = (
+                not args.pages_only
+                and not args.highlights_only
+                and not args.leaderboards_only
+            )
+            do_leaderboards = (
+                not args.pages_only
+                and not args.league_only
+                and not args.highlights_only
+            ) or args.leaderboards_only
             if do_pages:
                 print(
                     f"=== upload pages/{args.season}/w{week}/ "
@@ -804,6 +830,32 @@ def main(argv: list[str] | None = None) -> None:
                 reports.append(
                     {
                         "what": f"league/{args.season}/w{week}",
+                        "uploaded": r.uploaded,
+                        "failed": r.failed,
+                        "bytes": r.bytes,
+                        "seconds": round(r.seconds, 3),
+                        "errors": r.errors,
+                    }
+                )
+                print(
+                    f"  uploaded={r.uploaded} failed={r.failed} "
+                    f"bytes={r.bytes} seconds={r.seconds:.1f}",
+                    flush=True,
+                )
+            if do_leaderboards:
+                print(
+                    f"=== upload leaderboards/{args.season}/w{week}/ ===",
+                    flush=True,
+                )
+                r = upload_season_leaderboards(
+                    args.season,
+                    week,
+                    bucket=args.bucket,
+                    workers=args.workers,
+                )
+                reports.append(
+                    {
+                        "what": f"leaderboards/{args.season}/w{week}",
                         "uploaded": r.uploaded,
                         "failed": r.failed,
                         "bytes": r.bytes,

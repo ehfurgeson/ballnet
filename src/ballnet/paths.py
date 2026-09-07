@@ -18,6 +18,8 @@ LEAGUE_DIR = DATA_DIR / "league"
 HIGHLIGHTS_DIR = DATA_DIR / "highlights"
 # Stage H single-game KDEs (league_weekly scope). Not league_ytd.
 LEAGUE_WEEKLY_DIR = DIST_DIR / "league_weekly"
+# Knowball search sort boards (YTD percentiles by group/stat).
+LEADERBOARDS_DIR = DATA_DIR / "leaderboards"
 
 
 def ensure_data_dirs() -> None:
@@ -31,5 +33,6 @@ def ensure_data_dirs() -> None:
         LEAGUE_DIR,
         HIGHLIGHTS_DIR,
         LEAGUE_WEEKLY_DIR,
+        LEADERBOARDS_DIR,
     ):
         d.mkdir(parents=True, exist_ok=True)

@@ -15,6 +15,7 @@ from ballnet.highlights import HIGHLIGHT_GROUPS
 from ballnet.paths import (
     HIGHLIGHTS_DIR,
     INDEX_DIR,
+    LEADERBOARDS_DIR,
     LEAGUE_DIR,
     LEAGUE_WEEKLY_DIR,
     PAGES_DIR,
@@ -231,4 +232,28 @@ def upload_season_highlights(
         )
     if missing and len(pairs) == 1:
         raise FileNotFoundError(f"missing league_weekly files: {missing}")
+    return upload_files(pairs, bucket=bucket, **kwargs)
+
+
+def upload_season_leaderboards(
+    season: int,
+    as_of_week: int | None = None,
+    *,
+    bucket: str = DEFAULT_BUCKET,
+    groups: Iterable[str] | None = None,
+    **kwargs,
+) -> UploadResult:
+    """Upload `leaderboards/{season}/w{week}/{group}.json` search sort boards."""
+    week = as_of_week if as_of_week is not None else default_as_of_week(season)
+    selected = list(groups) if groups is not None else list(PUBLISHABLE_GROUPS)
+    pairs: list[tuple[str, Path]] = []
+    missing: list[str] = []
+    for group in selected:
+        local = LEADERBOARDS_DIR / str(season) / f"w{week}" / f"{group}.json"
+        if not local.is_file():
+            missing.append(str(local))
+            continue
+        pairs.append((f"leaderboards/{season}/w{week}/{group}.json", local))
+    if missing and not pairs:
+        raise FileNotFoundError(f"missing leaderboard files: {missing}")
     return upload_files(pairs, bucket=bucket, **kwargs)

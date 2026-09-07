@@ -14,6 +14,7 @@ import polars as pl
 from ballnet.catalog.registry import POSITION_GROUPS, stats_for_group
 from ballnet.catalog.types import StatDefinition
 from ballnet.density import load_densities
+from ballnet.leaderboard import publish_leaderboards
 from ballnet.paths import INDEX_DIR, LEAGUE_DIR, PAGES_DIR, YTD_DIR, ensure_data_dirs
 from ballnet.percentiles import attach_percentiles
 
@@ -405,6 +406,7 @@ def publish_all(
     all_bios: list[dict[str, Any]] = []
 
     publish_league_slice(season, as_of_week, groups=selected)
+    publish_leaderboards(season, as_of_week, groups=selected)
 
     for group in selected:
         result, bios = publish_group(
