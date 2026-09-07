@@ -64,6 +64,19 @@ def build_leaderboard_payload(
         s for s in stats_for_group(position_group) if not s.always_unavailable
     ]
     catalog_ids = {s.id for s in catalog}
+    missing_volume = sorted(
+        {
+            f"{s.id}->{s.volume_stat_id}"
+            for s in catalog
+            if s.volume_stat_id and s.volume_stat_id not in catalog_ids
+        }
+    )
+    if missing_volume:
+        # Dev-time signal: Knowball joins board.stats[volume_stat_id] for the slider.
+        print(
+            f"leaderboard {position_group}: volume_stat_id missing from stats keys: "
+            + ", ".join(missing_volume)
+        )
     stats_out: dict[str, list[dict[str, Any]]] = {s.id: [] for s in catalog}
 
     if long.height > 0:

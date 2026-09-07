@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ballnet.catalog.types import StatDefinition
+from ballnet.catalog.types import StatDefinition, with_volume
 
 KICKER_STATS: list[StatDefinition] = [
     StatDefinition("fg_attempts", "discrete", True, "count", 0, 8, 1, "fg_att", 1999, bin_width=1),
@@ -123,6 +123,45 @@ RETURNER_STATS: list[StatDefinition] = [
     ),
     StatDefinition("return_tds", "discrete", True, "count", 0, 2, 1, "returns", 1999, bin_width=1),
 ]
+
+
+KICKER_STATS = with_volume(
+    KICKER_STATS,
+    {
+        "fg_attempts": "fg_attempts",
+        "fg_long": "fg_attempts",
+        "fg_made": "fg_attempts",
+        "fg_pct": "fg_attempts",
+        "xp_attempts": "xp_attempts",
+        "xp_made": "xp_attempts",
+    },
+)
+
+PUNTER_STATS = with_volume(
+    PUNTER_STATS,
+    {
+        "fair_catch_rate": "punts",
+        "fair_catches": "punts",
+        "gross_punt_yards": "punts",
+        "gross_to_net_loss": "punts",
+        "inside_20": "punts",
+        "inside_20_rate": "punts",
+        "net_punt_yards": "punts",
+        "punts": "punts",
+        "touchback_rate": "punts",
+        "touchbacks": "punts",
+    },
+)
+
+RETURNER_STATS = with_volume(
+    RETURNER_STATS,
+    {
+        "kick_return_yards": "kick_returns",
+        "kick_returns": "kick_returns",
+        "punt_return_yards": "punt_returns",
+        "punt_returns": "punt_returns",
+    },
+)
 
 KICKER_STAT_IDS = [s.id for s in KICKER_STATS]
 PUNTER_STAT_IDS = [s.id for s in PUNTER_STATS]

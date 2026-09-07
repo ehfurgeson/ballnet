@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ballnet.catalog.types import StatDefinition
+from ballnet.catalog.types import StatDefinition, with_volume
 
 QB_STATS: list[StatDefinition] = [
     StatDefinition(
@@ -160,5 +160,22 @@ QB_STATS: list[StatDefinition] = [
         upper_bound=1,
     ),
 ]
+
+
+QB_STATS = with_volume(QB_STATS, {
+    "completion_pct": "pass_attempts",
+    "completions": "pass_attempts",
+    "cpoe": "pass_attempts",
+    "deep_attempts": "pass_attempts",
+    "interception_rate": "pass_attempts",
+    "pass_attempts": "pass_attempts",
+    "passer_rating": "pass_attempts",
+    "passing_epa": "pass_attempts",
+    "passing_td_rate": "pass_attempts",
+    "passing_yards": "pass_attempts",
+    "rush_attempts": "rush_attempts",
+    "rushing_tds": "rush_attempts",
+    "rushing_yards": "rush_attempts",
+})
 
 QB_STAT_IDS = [s.id for s in QB_STATS]

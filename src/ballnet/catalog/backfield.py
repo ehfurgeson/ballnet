@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ballnet.catalog.types import StatDefinition
+from ballnet.catalog.types import StatDefinition, with_volume
 
 BACKFIELD_STATS: list[StatDefinition] = [
     StatDefinition(
@@ -142,5 +142,23 @@ BACKFIELD_STATS: list[StatDefinition] = [
         upper_bound=1,
     ),
 ]
+
+
+BACKFIELD_STATS = with_volume(BACKFIELD_STATS, {
+    "broken_tackle_rate": "rush_attempts",
+    "broken_tackles": "rush_attempts",
+    "epa_per_rush": "rush_attempts",
+    "receiving_yards": "targets",
+    "receptions": "targets",
+    "rush_attempts": "rush_attempts",
+    "rushing_epa": "rush_attempts",
+    "rushing_yards": "rush_attempts",
+    "target_share": "targets",
+    "targets": "targets",
+    "wopr": "targets",
+    "yac_per_carry": "rush_attempts",
+    "yards_after_contact": "rush_attempts",
+    "yards_per_carry": "rush_attempts",
+})
 
 BACKFIELD_STAT_IDS = [s.id for s in BACKFIELD_STATS]

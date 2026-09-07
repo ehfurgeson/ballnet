@@ -24,3 +24,17 @@ class StatDefinition:
     upper_bound: float | None = None
     bin_width: float | None = None
     always_unavailable: bool = False
+    # Knowball search UX only — Stage C still qualifies on machine `denom`.
+    volume_stat_id: str | None = None
+
+
+def with_volume(
+    stats: list[StatDefinition], mapping: dict[str, str]
+) -> list[StatDefinition]:
+    """Attach Knowball UX volume_stat_id without rewriting positional constructors."""
+    from dataclasses import replace
+
+    return [
+        replace(s, volume_stat_id=mapping[s.id]) if s.id in mapping else s
+        for s in stats
+    ]
