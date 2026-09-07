@@ -1,4 +1,4 @@
-"""Locked ramp–hold: min_n = n_base * min(w, 4)."""
+"""Locked ramp–hold: min_n = n_base * min(w, 5)."""
 
 from __future__ import annotations
 

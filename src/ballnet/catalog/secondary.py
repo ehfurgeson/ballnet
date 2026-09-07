@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ballnet.catalog.types import StatDefinition, with_volume
+from ballnet.catalog.types import StatDefinition, with_min_n_base, with_volume
 
 SECONDARY_STATS: list[StatDefinition] = [
     StatDefinition(
@@ -147,6 +147,19 @@ SECONDARY_STATS = with_volume(SECONDARY_STATS, {
     "td_rate_allowed": "targets_allowed",
     "tds_allowed": "targets_allowed",
     "yards_per_target_allowed": "targets_allowed",
+})
+
+
+SECONDARY_STATS = with_min_n_base(SECONDARY_STATS, {
+    "adot_allowed": 4,
+    "completion_pct_allowed": 4,
+    "completions_allowed": 4,
+    "rating_allowed": 4,
+    "receiving_yards_allowed": 4,
+    "targets_allowed": 4,
+    "td_rate_allowed": 4,
+    "tds_allowed": 4,
+    "yards_per_target_allowed": 4,
 })
 
 SECONDARY_STAT_IDS = [s.id for s in SECONDARY_STATS]

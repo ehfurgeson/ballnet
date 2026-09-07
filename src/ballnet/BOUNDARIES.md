@@ -7,7 +7,7 @@
 - Drop NGS `week == 0` (season totals) from the weekly spine.
 - Left-join enrichment tables; preserve nulls (`missing_source` later — never impute 0).
 - Use GSIS `player_id` as the canonical key; map PFR via `ff_playerids`.
-- Apply ramp–hold as `min_n = n_base * min(as_of_week, 4)` with `as_of_week` = viewed NFL week.
+- Apply ramp–hold as `min_n = n_base * min(as_of_week, 5)` with `as_of_week` = viewed NFL week.
 
 ## Ask First
 

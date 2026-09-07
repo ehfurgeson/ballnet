@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ballnet.catalog.types import StatDefinition, with_volume
+from ballnet.catalog.types import StatDefinition, with_min_n_base, with_volume
 
 KICKER_STATS: list[StatDefinition] = [
     StatDefinition("fg_attempts", "discrete", True, "count", 0, 8, 1, "fg_att", 1999, bin_width=1),
@@ -162,6 +162,29 @@ RETURNER_STATS = with_volume(
         "punt_returns": "punt_returns",
     },
 )
+
+
+KICKER_STATS = with_min_n_base(KICKER_STATS, {
+    "fg_attempts": 2,
+    "fg_long": 2,
+    "fg_made": 2,
+    "fg_pct": 2,
+    "xp_attempts": 2,
+    "xp_made": 2,
+})
+
+PUNTER_STATS = with_min_n_base(PUNTER_STATS, {
+    "fair_catch_rate": 4,
+    "fair_catches": 4,
+    "gross_punt_yards": 4,
+    "gross_to_net_loss": 4,
+    "inside_20": 4,
+    "inside_20_rate": 4,
+    "net_punt_yards": 4,
+    "punts": 4,
+    "touchback_rate": 4,
+    "touchbacks": 4,
+})
 
 KICKER_STAT_IDS = [s.id for s in KICKER_STATS]
 PUNTER_STAT_IDS = [s.id for s in PUNTER_STATS]

@@ -38,3 +38,15 @@ def with_volume(
         replace(s, volume_stat_id=mapping[s.id]) if s.id in mapping else s
         for s in stats
     ]
+
+
+def with_min_n_base(
+    stats: list[StatDefinition], mapping: dict[str, int]
+) -> list[StatDefinition]:
+    """Override ramp–hold n_base (keep in sync with knowball minNBase)."""
+    from dataclasses import replace
+
+    return [
+        replace(s, min_n_base=mapping[s.id]) if s.id in mapping else s
+        for s in stats
+    ]

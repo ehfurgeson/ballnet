@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ballnet.catalog.types import StatDefinition, with_volume
+from ballnet.catalog.types import StatDefinition, with_min_n_base, with_volume
 
 PASS_CATCHER_STATS: list[StatDefinition] = [
     StatDefinition(
@@ -181,6 +181,26 @@ PASS_CATCHER_STATS = with_volume(PASS_CATCHER_STATS, {
     "wopr": "targets",
     "yac": "receptions",
     "yards_per_target": "targets",
+})
+
+
+PASS_CATCHER_STATS = with_min_n_base(PASS_CATCHER_STATS, {
+    "adot": 5,
+    "air_yards_share": 5,
+    "catch_pct": 5,
+    "drop_rate": 5,
+    "drops": 5,
+    "epa_per_target": 5,
+    "racr": 5,
+    "receiving_epa": 5,
+    "receiving_td_rate": 5,
+    "receiving_yards": 5,
+    "receptions": 5,
+    "target_share": 5,
+    "targets": 5,
+    "wopr": 5,
+    "yac": 3,
+    "yards_per_target": 5,
 })
 
 PASS_CATCHER_STAT_IDS = [s.id for s in PASS_CATCHER_STATS]
