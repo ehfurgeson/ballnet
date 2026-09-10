@@ -21,8 +21,8 @@ from ballnet.publish import (
     publish_league_slice,
     publish_player_page,
     publish_range,
+    rebuild_index_from_pages,
     sync_index_to_knowball,
-    write_seasons_index,
 )
 from ballnet.storage_upload import (
     upload_index,
@@ -158,7 +158,55 @@ def main(argv: list[str] | None = None) -> None:
         "--sync-knowball",
         type=Path,
         default=None,
-        help="Copy index JSON into Knowball web/ (e.g. ../knowball/web)",
+        help="Copy index JSON into Knowball web/public/viz/ (gitignored local mirror)",
+    )
+    p_all.add_argument(
+        "--replace-index",
+        action="store_true",
+        help="Replace players/seasons index instead of merging (default: merge)",
+    )
+
+    p_rebuild_index = sub.add_parser(
+        "rebuild-index",
+        help="Rebuild index/{players,seasons,current}.json from existing page JSON",
+    )
+    p_rebuild_index.add_argument(
+        "--start",
+        type=int,
+        default=2016,
+        help="First season to include (default 2016)",
+    )
+    p_rebuild_index.add_argument(
+        "--end",
+        type=int,
+        required=True,
+        help="Last season to include",
+    )
+    p_rebuild_index.add_argument(
+        "--current-season",
+        type=int,
+        default=None,
+        help="index/current.json season (default: --end)",
+    )
+    p_rebuild_index.add_argument(
+        "--current-week",
+        type=int,
+        default=None,
+        help="index/current.json asOfWeek (default: that season's slice week)",
+    )
+    p_rebuild_index.add_argument(
+        "--as-of-week",
+        type=int,
+        default=None,
+        help="Override week for every season (default: 17 before 2021, else 18; "
+        "use with care for in-progress seasons)",
+    )
+    p_rebuild_index.add_argument(
+        "--week",
+        action="append",
+        default=None,
+        metavar="SEASON:WEEK",
+        help="Override week for one season (repeatable), e.g. --week 2026:1",
     )
 
     p_range = sub.add_parser(
@@ -194,7 +242,7 @@ def main(argv: list[str] | None = None) -> None:
         "--sync-knowball",
         type=Path,
         default=None,
-        help="Copy index JSON into Knowball web/ after the range completes",
+        help="Copy index JSON into Knowball web/public/viz/ (gitignored local mirror)",
     )
 
     p_league = sub.add_parser(
@@ -558,9 +606,7 @@ def main(argv: list[str] | None = None) -> None:
             args.as_of_week,
             groups=groups,
             also_current=not args.no_current,
-        )
-        write_seasons_index(
-            [{"season": batch.season, "asOfWeek": batch.as_of_week}]
+            merge_index=not args.replace_index,
         )
         sync_paths: dict[str, str] | None = None
         if args.sync_knowball is not None:
@@ -590,6 +636,42 @@ def main(argv: list[str] | None = None) -> None:
                 indent=2,
             )
         )
+        return
+
+    if args.cmd == "rebuild-index":
+        overrides: dict[int, int] = {}
+        for raw in args.week or []:
+            if ":" not in raw:
+                raise SystemExit(f"--week must be SEASON:WEEK, got {raw!r}")
+            s_str, w_str = raw.split(":", 1)
+            overrides[int(s_str)] = int(w_str)
+        if args.end < args.start:
+            raise SystemExit("--end must be >= --start")
+        slices: list[tuple[int, int]] = []
+        for season in range(args.start, args.end + 1):
+            if season in overrides:
+                week = overrides[season]
+            elif args.as_of_week is not None:
+                week = args.as_of_week
+            else:
+                week = default_as_of_week(season)
+            slices.append((season, week))
+        cur_season = args.current_season if args.current_season is not None else args.end
+        if args.current_week is not None:
+            cur_week = args.current_week
+        else:
+            cur_week = dict(slices).get(cur_season, default_as_of_week(cur_season))
+        print(
+            f"=== rebuild-index {args.start}-{args.end} "
+            f"current={cur_season} w{cur_week} ===",
+            flush=True,
+        )
+        report = rebuild_index_from_pages(
+            slices,
+            current_season=cur_season,
+            current_week=cur_week,
+        )
+        print(json.dumps(report, indent=2))
         return
 
     if args.cmd == "publish-league-range":

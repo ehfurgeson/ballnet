@@ -389,6 +389,71 @@ def write_seasons_index(slices: Iterable[dict[str, int]]) -> Path:
     return out
 
 
+def upsert_seasons_index(season: int, as_of_week: int) -> Path:
+    """Insert or replace one season's asOfWeek in `index/seasons.json`."""
+    ensure_data_dirs()
+    by_season: dict[int, int] = {}
+    existing = INDEX_DIR / "seasons.json"
+    if existing.exists():
+        prev = json.loads(existing.read_text(encoding="utf-8"))
+        for row in prev.get("seasons") or []:
+            by_season[int(row["season"])] = int(row["asOfWeek"])
+    by_season[int(season)] = int(as_of_week)
+    return write_seasons_index(
+        {"season": s, "asOfWeek": w} for s, w in by_season.items()
+    )
+
+
+def rebuild_index_from_pages(
+    slices: Iterable[tuple[int, int]],
+    *,
+    current_season: int | None = None,
+    current_week: int | None = None,
+) -> dict[str, Any]:
+    """Rebuild players/seasons/current index from existing page JSON files."""
+    ensure_data_dirs()
+    slice_list = [(int(s), int(w)) for s, w in slices]
+    if not slice_list:
+        raise ValueError("slices must be non-empty")
+
+    bios_by_id: dict[str, dict[str, Any]] = {}
+    for season, week in slice_list:
+        page_dir = PAGES_DIR / str(season) / f"w{week}"
+        if not page_dir.is_dir():
+            raise FileNotFoundError(f"missing pages dir {page_dir}")
+        for path in sorted(page_dir.glob("*.json")):
+            page = json.loads(path.read_text(encoding="utf-8"))
+            player = page.get("player") or {}
+            pid = player.get("id") or path.stem
+            _merge_bios(
+                bios_by_id,
+                [
+                    {
+                        "id": pid,
+                        "name": player.get("name") or pid,
+                        "position": player.get("position") or "",
+                        "team": player.get("team") or "",
+                        "seasons": [season],
+                    }
+                ],
+            )
+
+    index_path = write_players_index(bios_by_id.values(), merge_existing=False)
+    seasons_path = write_seasons_index(
+        {"season": s, "asOfWeek": w} for s, w in slice_list
+    )
+    cur_season = current_season if current_season is not None else slice_list[-1][0]
+    cur_week = current_week if current_week is not None else slice_list[-1][1]
+    current_path = write_current_index(cur_season, cur_week)
+    return {
+        "players": len(bios_by_id),
+        "slices": [{"season": s, "asOfWeek": w} for s, w in slice_list],
+        "index_path": str(index_path),
+        "seasons_index_path": str(seasons_path),
+        "current_index_path": str(current_path),
+    }
+
+
 def publish_all(
     season: int,
     as_of_week: int,
@@ -396,9 +461,13 @@ def publish_all(
     groups: Iterable[str] | None = None,
     also_current: bool = True,
     write_index: bool = True,
-    merge_index: bool = False,
+    merge_index: bool = True,
 ) -> BatchPublishResult:
-    """Batch Stage G for every player in each group + league shapes + optional index."""
+    """Batch Stage G for every player in each group + league shapes + optional index.
+
+    By default merges into the existing multi-season players index so a single-season
+    publish does not wipe historical search rows.
+    """
     ensure_data_dirs()
     t0 = time.perf_counter()
     selected = list(groups) if groups is not None else list(PUBLISHABLE_GROUPS)
@@ -422,6 +491,7 @@ def publish_all(
             write_players_index(all_bios, merge_existing=merge_index)
         )
         current_path = str(write_current_index(season, as_of_week))
+        upsert_seasons_index(season, as_of_week)
 
     return BatchPublishResult(
         season=season,
@@ -495,7 +565,11 @@ def publish_range(
 
 
 def sync_index_to_knowball(knowball_web: Path) -> dict[str, str]:
-    """Copy search/current/seasons index into Knowball for local wiring."""
+    """Copy search/current/seasons index into Knowball gitignored `public/viz/index/`.
+
+    Does not write into `src/data/ballnet/` — Storage (or sibling ballnet/data) is
+    the source of truth; the public/viz mirror is optional local smoke only.
+    """
     ensure_data_dirs()
     dest = knowball_web / "public" / "viz" / "index"
     dest.mkdir(parents=True, exist_ok=True)
@@ -510,15 +584,6 @@ def sync_index_to_knowball(knowball_web: Path) -> dict[str, str]:
         target = dest / name
         shutil.copy2(src, target)
         copied[name] = str(target)
-    data_dest = knowball_web / "src" / "data" / "ballnet"
-    data_dest.mkdir(parents=True, exist_ok=True)
-    for name in names:
-        src = INDEX_DIR / name
-        if not src.exists():
-            continue
-        target = data_dest / name
-        shutil.copy2(src, target)
-        copied[f"src/{name}"] = str(target)
     return copied
 
 

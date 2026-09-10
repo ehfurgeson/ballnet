@@ -5,9 +5,7 @@ Goal: after each NFL week (or after a slate finishes), refresh Knowball viz for 
 ## Canonical one-command shape (target)
 
 ```bash
-uv run ballnet refresh --season YEAR --as-of-week W \
-  --sync-knowball ../knowball/web \
-  --upload
+uv run ballnet refresh --season YEAR --as-of-week W --upload
 ```
 
 Intended stages inside `refresh` (not a new math path — wrap what already exists):
@@ -15,10 +13,9 @@ Intended stages inside `refresh` (not a new math path — wrap what already exis
 1. **A** `fetch --season YEAR` (incremental nflverse cache)
 2. **B** `spine --season YEAR`
 3. **C–E** for every publishable group at `as-of-week W` (ytd → densities → percentiles)
-4. **G** `publish-all --season YEAR --as-of-week W` (scalar pages + league KDE + search leaderboards + index/current)
+4. **G** `publish-all --season YEAR --as-of-week W` (scalar pages + league KDE + search leaderboards + **merged** index/current/seasons)
 5. **H** `highlights --season YEAR --week W` (weekly z-score board + `league_weekly` KDEs → `data/highlights/` + `data/dists/league_weekly/`)
-6. Optional: `--sync-knowball` for the search index copy into Knowball
-7. Optional: `--upload` → `upload-storage --index --season YEAR --highlights` (pages + league + leaderboards + highlights + league_weekly)
+6. Optional: `--upload` → `upload-storage --index --season YEAR --highlights` (pages + league + leaderboards + highlights + league_weekly)
 
 Until `refresh` exists, run that sequence manually (see below).
 
@@ -28,18 +25,19 @@ Until `refresh` exists, run that sequence manually (see below).
 cd ballnet
 uv sync
 
-YEAR=2025
-W=18   # latest completed REG week
+YEAR=2026
+W=1   # latest completed REG week
 
-uv run ballnet fetch --season $YEAR
-uv run ballnet spine --season $YEAR
-uv run ballnet publish-all --season $YEAR --as-of-week $W \
-  --sync-knowball ../knowball/web
+uv run ballnet fetch --season $YEAR --force
+uv run ballnet spine --season $YEAR --force-fetch
+uv run ballnet publish-all --season $YEAR --as-of-week $W
 uv run ballnet highlights --season $YEAR --week $W
-uv run ballnet upload-storage --index --season $YEAR --highlights
+uv run ballnet upload-storage --index --season $YEAR --as-of-week $W --highlights
 ```
 
-`publish-all` without `--skip-pipeline` already runs C–E then G for all groups.
+`publish-all` without `--skip-pipeline` already runs C–E then G for all groups. It **merges** into the multi-season players/seasons index by default (use `--replace-index` only when intentionally wiping history).
+
+Knowball reads index/pages from **Supabase Storage** (or sibling `ballnet/data` locally). Do not commit Ballnet JSON into the Knowball repo.
 
 ## Automation options (pick later)
 
@@ -71,7 +69,7 @@ nflverse weeklies often lag end-of-slate by hours. Prefer **Tuesday ~10:00 Ameri
 
 - Empty/partial nflverse week → sparse YTD / wrong as-of-week — verify spine week max before publish
 - Storage free-tier burst drops — retry `upload-storage --season YEAR` (upsert)
-- Index out of sync with Knowball search — always `--sync-knowball` or re-copy `data/index/*.json`
+- Index out of sync with Knowball search — re-run `upload-storage --index` (Knowball reads Storage, not a git-synced copy)
 
 ## Follow-ups before automating
 
