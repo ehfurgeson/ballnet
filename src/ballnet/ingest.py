@@ -209,7 +209,7 @@ def fetch_season(season: int, *, force: bool = False) -> list[FetchResult]:
         empty_key="ff_opportunity",
     )
 
-    run("ff_playerids", lambda: nfl.load_ff_playerids(), "gsis↔pfr map")
+    run("ff_playerids", lambda: nfl.load_ff_playerids(), "gsis<->pfr map")
 
     run(
         f"rosters_{season}",
