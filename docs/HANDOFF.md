@@ -94,7 +94,7 @@ CLI: `uv run ballnet upload-storage --index --season YEAR` (uploads pages + leag
 | No `returner` rows | KR/PR catalogs empty | Roster positions are usually WR/RB; need an explicit rule — **ask first** |
 | PBP / participation / FTN not exploded | `red_zone_*`, `route_pct` always `missing_source` | Cached in `data/raw/` already |
 | Pre-2018 PFR advanced cols missing on spine | many PFR stats `missing_source` | Stage C null-fills; expected |
-| Catalog domains are weekly-ish | Season YTD volumes expand `xMin`/`xMax` | Intentional per contract |
+| Catalog domains are weekly-ish | Plot `[xMin, xMax]` = qualified sample min/max | Intentional — axis ends at in-sample extremes |
 
 ---
 
@@ -121,7 +121,7 @@ CLI: `uv run ballnet upload-storage --index --season YEAR` (uploads pages + leag
 - Every catalog id: Gaussian KDE + reflection at catalog bounds; grid on `[xMin,xMax]`; ∫y dx ≈ 1. Catalog `kind: discrete` is metadata only (formatting/UI).
 - Percentiles use the same inclusive CDF as knowball `kdeCdf`, then orient with `higherIsBetter`.
 - KDE `y` is **density** (can be ≫ 1 on narrow domains). UI must not label it as “% of league.”
-- Season-YTD volume samples often exceed catalog weekly domains → `_expand_domain` widens charts for that `(season, week, group, stat)`.
+- Season-YTD `_expand_domain`: published plot domain is **`[sample_min, sample_max]`** (empty sample keeps catalog). Axes stay low→high raw values.
 
 **Catalog / publish**
 

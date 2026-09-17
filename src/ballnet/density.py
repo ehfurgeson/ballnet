@@ -62,12 +62,21 @@ def _expand_domain(
     x_max: float,
     sample: np.ndarray,
 ) -> tuple[float, float]:
-    """Keep catalog domain unless the qualified sample truly exceeds it."""
+    """Plot domain is the qualified sample span: [min, max].
+
+    Raw-value axes stay low→high. For higherIsBetter, left is worst (0th) and
+    right is best (100th). For lowerIsBetter that is reversed in meaning
+    (worst sits at the high/right end) without flipping the axis.
+    """
     if sample.size == 0:
         return x_min, x_max
     lo = float(np.min(sample))
     hi = float(np.max(sample))
-    return min(x_min, lo), max(x_max, hi)
+    if hi <= lo:
+        # Degenerate sample: keep a tiny positive span for the KDE grid.
+        pad = max((x_max - x_min) * 0.01, 1e-6)
+        return lo, lo + pad
+    return lo, hi
 
 
 def _reflected_kde_curve(
