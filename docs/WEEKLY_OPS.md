@@ -59,6 +59,28 @@ Recommendation for v1: **manual or local cron** calling the recipe above. Move t
 
 nflverse weeklies often lag end-of-slate by hours. Prefer **Tuesday ~10:00 America/New_York** (or after you confirm week `W` is complete in raw box scores) over “Monday midnight.”
 
+## Fantasy position ranks
+
+Weekly `publish-all` for the **current** season refreshes FantasyPros weekly ECR (`fantasyPosRankKind: "consensus"`) on pages, search leaderboards, and highlight rows (QB/WR/RB/TE only).
+
+Closed seasons use PPR finish among that position (`kind: "finish"`). After a season ends and `index/current.json` advances to year `Y+1`, **republish year `Y` at its final REG week** so last year’s pages switch from consensus to finish:
+
+```bash
+# Current pointer is already Y+1
+uv run ballnet publish-all --season $Y --as-of-week 18 --no-current --skip-pipeline
+uv run ballnet highlights --season $Y --week 18
+uv run ballnet upload-storage --season $Y --as-of-week 18 --highlights
+```
+
+(`--no-current` keeps `pages/current/` and `index/current.json` on the new year. Kind resolution then treats `$Y` as finish.)
+
+One-time historical backfill (finish ranks on 2016–last closed season):
+
+```bash
+uv run ballnet publish-range --start 2016 --end $Y --skip-pipeline --no-current
+# then upload each season slice + index
+```
+
 ## What *not* to re-run every week
 
 - Full `publish-range --start 2016 --end …` — historical season-end slices are static unless you intentionally rebuild

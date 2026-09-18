@@ -14,6 +14,7 @@ import polars as pl
 from ballnet.catalog.registry import POSITION_GROUPS, stats_for_group
 from ballnet.catalog.types import StatDefinition
 from ballnet.density import load_densities
+from ballnet.fantasy_rank import FantasyPosRank, attach_fantasy_pos_rank, fantasy_pos_ranks
 from ballnet.leaderboard import publish_leaderboards
 from ballnet.paths import INDEX_DIR, LEAGUE_DIR, PAGES_DIR, YTD_DIR, ensure_data_dirs
 from ballnet.percentiles import attach_percentiles
@@ -114,6 +115,7 @@ def _page_dict(
     by_id: dict[str, dict[str, Any]],
     catalog_stats: list[StatDefinition],
     seasons: list[int] | None = None,
+    ranks: dict[str, FantasyPosRank] | None = None,
 ) -> dict[str, Any]:
     stats_out: list[dict[str, Any]] = []
     for stat in catalog_stats:
@@ -126,15 +128,18 @@ def _page_dict(
         if snap is not None:
             stats_out.append(snap)
 
+    player: dict[str, Any] = {
+        "id": player_id,
+        "name": meta["player_display_name"],
+        "position": meta["position_code"],
+        "team": meta["team"],
+        "seasons": seasons if seasons is not None else [season],
+    }
+    attach_fantasy_pos_rank(player, player_id, ranks)
+
     return {
         "schemaVersion": 1,
-        "player": {
-            "id": player_id,
-            "name": meta["player_display_name"],
-            "position": meta["position_code"],
-            "team": meta["team"],
-            "seasons": seasons if seasons is not None else [season],
-        },
+        "player": player,
         "season": season,
         "asOfWeek": as_of_week,
         "stats": stats_out,
@@ -225,6 +230,7 @@ def publish_player_page(
 
     meta = player_rows.row(0, named=True)
     by_id = {r["stat_id"]: r for r in player_rows.to_dicts()}
+    ranks = fantasy_pos_ranks(season, as_of_week, updating_current=also_current)
     page = _page_dict(
         season=season,
         as_of_week=as_of_week,
@@ -232,6 +238,7 @@ def publish_player_page(
         meta=meta,
         by_id=by_id,
         catalog_stats=stats_for_group(position_group),
+        ranks=ranks,
     )
 
     out = PAGES_DIR / str(season) / f"w{as_of_week}" / f"{player_id}.json"
@@ -257,6 +264,7 @@ def publish_group(
     position_group: str,
     *,
     also_current: bool = True,
+    ranks: dict[str, FantasyPosRank] | None = None,
 ) -> tuple[GroupPublishResult, list[dict[str, Any]]]:
     """Publish every player in a group's Stage E panel. Returns bios for the index."""
     if position_group not in POSITION_GROUPS:
@@ -284,6 +292,8 @@ def publish_group(
     week_dir.mkdir(parents=True, exist_ok=True)
     if also_current:
         (PAGES_DIR / "current").mkdir(parents=True, exist_ok=True)
+    if ranks is None:
+        ranks = fantasy_pos_ranks(season, as_of_week, updating_current=also_current)
 
     bios: list[dict[str, Any]] = []
     paths = 0
@@ -300,6 +310,7 @@ def publish_group(
             meta=meta,
             by_id=by_id,
             catalog_stats=catalog_stats,
+            ranks=ranks,
         )
         _write_json(week_dir / f"{pid}.json", page)
         paths += 1
@@ -474,12 +485,19 @@ def publish_all(
     group_results: list[GroupPublishResult] = []
     all_bios: list[dict[str, Any]] = []
 
+    # One rank table per (season, as_of_week) — not once per group.
+    ranks = fantasy_pos_ranks(season, as_of_week, updating_current=also_current)
+
     publish_league_slice(season, as_of_week, groups=selected)
-    publish_leaderboards(season, as_of_week, groups=selected)
+    publish_leaderboards(season, as_of_week, groups=selected, ranks=ranks)
 
     for group in selected:
         result, bios = publish_group(
-            season, as_of_week, group, also_current=also_current
+            season,
+            as_of_week,
+            group,
+            also_current=also_current,
+            ranks=ranks,
         )
         group_results.append(result)
         all_bios.extend(bios)

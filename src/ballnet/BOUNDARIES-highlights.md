@@ -6,6 +6,7 @@
 - Score only the curated allowlist in `_allowlist_for_group` (volumes + clear single-game rates).
 - Orient z-scores with catalog `higherIsBetter` via `ballnet.scoring` against the **season-of-games** sample (`week <= W`), not same-week peers alone.
 - Require `peerN >= MIN_PEER_N` (16) before emitting a row; apply volume floors for KDE + z; apply `min_value` only when selecting board rows (rare-event spam), not when building the KDE sample.
+- Attach optional `fantasyPosRank` / `fantasyPosRankKind` from `fantasy_rank` onto board rows. Do not reuse highlight `rank` for fantasy position order.
 - Write `data/highlights/{season}/w{week}.json` and allowlist curves under `data/dists/league_weekly/{season}/w{week}/{group}.json` (`scope: "league_weekly"`). Do not embed `curve[]` on board rows.
 
 ## Ask First

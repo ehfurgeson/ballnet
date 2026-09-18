@@ -11,6 +11,7 @@ from typing import Any, Iterable
 import polars as pl
 
 from ballnet.catalog.registry import POSITION_GROUPS, stats_for_group
+from ballnet.fantasy_rank import FantasyPosRank, attach_fantasy_pos_rank, fantasy_pos_ranks
 from ballnet.paths import LEADERBOARDS_DIR, YTD_DIR, ensure_data_dirs
 from ballnet.percentiles import attach_percentiles
 
@@ -49,6 +50,7 @@ def build_leaderboard_payload(
     position_group: str,
     *,
     long: pl.DataFrame | None = None,
+    ranks: dict[str, FantasyPosRank] | None = None,
 ) -> dict[str, Any]:
     """Build one group leaderboard JSON from Stage E long panel."""
     if position_group not in POSITION_GROUPS:
@@ -59,6 +61,8 @@ def build_leaderboard_payload(
         if not pct_path.exists():
             attach_percentiles(season, as_of_week, position_group=position_group)
         long = pl.read_parquet(pct_path)
+    if ranks is None:
+        ranks = fantasy_pos_ranks(season, as_of_week)
 
     catalog = [
         s for s in stats_for_group(position_group) if not s.always_unavailable
@@ -87,18 +91,18 @@ def build_leaderboard_payload(
             value = rec.get("player_value")
             pct = rec.get("percentile")
             denom = rec.get("denom_ytd")
-            stats_out[sid].append(
-                {
-                    "playerId": rec["player_id"],
-                    "name": rec.get("player_display_name") or "",
-                    "position": rec.get("position_code") or "",
-                    "team": rec.get("team") or "",
-                    "value": float(value) if value is not None else None,
-                    "percentile": float(pct) if pct is not None else None,
-                    "denomYtd": float(denom) if denom is not None else None,
-                    "qualified": bool(rec.get("qualified")),
-                }
-            )
+            row: dict[str, Any] = {
+                "playerId": rec["player_id"],
+                "name": rec.get("player_display_name") or "",
+                "position": rec.get("position_code") or "",
+                "team": rec.get("team") or "",
+                "value": float(value) if value is not None else None,
+                "percentile": float(pct) if pct is not None else None,
+                "denomYtd": float(denom) if denom is not None else None,
+                "qualified": bool(rec.get("qualified")),
+            }
+            attach_fantasy_pos_rank(row, rec["player_id"], ranks)
+            stats_out[sid].append(row)
 
     for sid, rows in stats_out.items():
         rows.sort(key=_row_sort_key)
@@ -116,11 +120,17 @@ def publish_leaderboard_group(
     season: int,
     as_of_week: int,
     position_group: str,
+    *,
+    ranks: dict[str, FantasyPosRank] | None = None,
 ) -> LeaderboardPublishResult:
     """Write `leaderboards/{season}/w{week}/{group}.json`."""
     ensure_data_dirs()
     t0 = time.perf_counter()
-    payload = build_leaderboard_payload(season, as_of_week, position_group)
+    if ranks is None:
+        ranks = fantasy_pos_ranks(season, as_of_week)
+    payload = build_leaderboard_payload(
+        season, as_of_week, position_group, ranks=ranks
+    )
     out = LEADERBOARDS_DIR / str(season) / f"w{as_of_week}" / f"{position_group}.json"
     _write_json(out, payload)
     player_ids = {
@@ -142,9 +152,13 @@ def publish_leaderboards(
     as_of_week: int,
     *,
     groups: Iterable[str] | None = None,
+    ranks: dict[str, FantasyPosRank] | None = None,
 ) -> list[LeaderboardPublishResult]:
     """Publish leaderboard JSON for every selected group in a season slice."""
     selected = list(groups) if groups is not None else list(_DEFAULT_GROUPS)
+    if ranks is None:
+        ranks = fantasy_pos_ranks(season, as_of_week)
     return [
-        publish_leaderboard_group(season, as_of_week, group) for group in selected
+        publish_leaderboard_group(season, as_of_week, group, ranks=ranks)
+        for group in selected
     ]

@@ -6,8 +6,9 @@
 - Filter `season_type` / `game_type` to REG for box, NGS, snaps, and PFR weeklies.
 - Drop NGS `week == 0` (season totals) from the weekly spine.
 - Left-join enrichment tables; preserve nulls (`missing_source` later — never impute 0).
-- Use GSIS `player_id` as the canonical key; map PFR via `ff_playerids`.
+- Use GSIS `player_id` as the canonical key; map PFR via `ff_playerids`. FantasyPros weekly ECR joins `fantasypros_id` → `gsis_id`; null GSIS omits the rank.
 - Apply ramp–hold as `min_n = n_base * min(as_of_week, 5)` with `as_of_week` = viewed NFL week.
+- Build fantasy position ranks once per `(season, as_of_week)` (`fantasy_rank.fantasy_pos_ranks`) and attach optional `fantasyPosRank` / `fantasyPosRankKind` on page/leaderboard/highlight rows. Never write them to `index/players.json`.
 
 ## Ask First
 
@@ -18,6 +19,7 @@
 ## Never
 
 - Put fantasy draft optimization or ffoptim logic in this package.
+- Invent a fantasy rank for FB / OL / defense / K / P, or compute ranks in Knowball.
 - Write raw weeklies into a public `viz` schema.
 - Invent Knowball catalog `stat.id` values — ids come from the knowball catalog / ETL brief.
 - Average weekly rates for YTD; use ratio-of-sums (and recompute passer rating from components).
@@ -35,7 +37,8 @@
 - NGS aggressiveness / expected completion arrive as 0–100; Stage C scales them to 0–1 for Knowball `percent` format.
 - Stage C covers all position groups via `catalog/registry.py`. Play-grain stats (`red_zone_*`, `route_pct`) stay `missing_source` until PBP/participation are on the spine — leaderboard `denomYtd` is null for those ids.
 - Returner `position_group` has no weekly rows (nflverse roster positions are rarely KR/PR).
-- Stage G batch (`publish-all`) writes **scalar** JSON under `data/pages/`, shared curves under `data/league/{season}/w{week}/{group}.json`, search boards under `data/leaderboards/`, and rebuilds `data/index/{players,current}.json`. Knowball must not import page JSON into the Next bundle — only the small index.- Pre-2018 spines omit many PFR advanced columns (ingest empty stubs). Stage C null-fills expected enrichment cols before aggregate so older seasons publish with `missing_source` instead of crashing.
+- Stage G batch (`publish-all`) writes **scalar** JSON under `data/pages/`, shared curves under `data/league/{season}/w{week}/{group}.json`, search boards under `data/leaderboards/`, and rebuilds `data/index/{players,current}.json`. Knowball must not import page JSON into the Next bundle — only the small index. Live-season pages get FantasyPros weekly ECR (`kind: consensus`); closed seasons get PPR finish among QB/WR/RB/TE (`kind: finish`). After current moves to `Y+1`, republish year `Y` at its final REG week so last year’s pages switch to finish.
+- Pre-2018 spines omit many PFR advanced columns (ingest empty stubs). Stage C null-fills expected enrichment cols before aggregate so older seasons publish with `missing_source` instead of crashing.
 - Storage uploads (`upload-storage`) go to public bucket `knowball-public` under `index/`, `pages/`, `league/`, `highlights/`, and `dists/league_weekly/`. Free plan is ~1 GB — skip `--also-current` (duplicates the season). Dashboard drag-drops often land at bucket root; re-upload with `--index` to get `index/*.json`.
 - Service-role key lives in ballnet `.env` only; Knowball fetches public object URLs (no Supabase client).
 - Never re-embed league `curve` onto player pages; league shapes live under `data/league/` only.

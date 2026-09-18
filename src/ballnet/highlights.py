@@ -14,6 +14,7 @@ import polars as pl
 from ballnet.catalog.registry import stats_for_group
 from ballnet.catalog.types import StatDefinition
 from ballnet.density import build_league_density
+from ballnet.fantasy_rank import FantasyPosRank, attach_fantasy_pos_rank, fantasy_pos_ranks
 from ballnet.paths import HIGHLIGHTS_DIR, LEAGUE_WEEKLY_DIR, SPINE_DIR, ensure_data_dirs
 from ballnet.publish import PUBLISHABLE_GROUPS
 from ballnet.scoring import MIN_PEER_N, gaussian_tail_one_in_n, oriented_z_score
@@ -307,7 +308,13 @@ def _load_spine(season: int) -> pl.DataFrame:
     return pl.read_parquet(path)
 
 
-def _board_from_spine(spine: pl.DataFrame, season: int, week: int) -> dict[str, Any]:
+def _board_from_spine(
+    spine: pl.DataFrame,
+    season: int,
+    week: int,
+    *,
+    ranks: dict[str, FantasyPosRank] | None = None,
+) -> dict[str, Any]:
     through = spine.filter(
         (pl.col("week") <= week) & pl.col("position_group").is_not_null()
     )
@@ -336,6 +343,7 @@ def _board_from_spine(spine: pl.DataFrame, season: int, week: int) -> dict[str, 
     for i, row in enumerate(balanced[:TOP_N], start=1):
         entry = dict(row)
         entry["rank"] = i
+        attach_fantasy_pos_rank(entry, entry["playerId"], ranks)
         top.append(entry)
 
     for group in HIGHLIGHT_GROUPS:
@@ -343,6 +351,7 @@ def _board_from_spine(spine: pl.DataFrame, season: int, week: int) -> dict[str, 
         for i, row in enumerate(group_rows, start=1):
             entry = dict(row)
             entry["rank"] = i
+            attach_fantasy_pos_rank(entry, entry["playerId"], ranks)
             by_group[group].append(entry)
 
     return {
@@ -357,7 +366,8 @@ def _board_from_spine(spine: pl.DataFrame, season: int, week: int) -> dict[str, 
 
 def build_highlights_board(season: int, week: int) -> dict[str, Any]:
     """Compute weekly board payload from spine (does not write)."""
-    return _board_from_spine(_load_spine(season), season, week)
+    ranks = fantasy_pos_ranks(season, week)
+    return _board_from_spine(_load_spine(season), season, week, ranks=ranks)
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -373,7 +383,8 @@ def publish_highlights(season: int, week: int) -> HighlightsPublishResult:
     through = spine.filter(
         (pl.col("week") <= week) & pl.col("position_group").is_not_null()
     )
-    payload = _board_from_spine(spine, season, week)
+    ranks = fantasy_pos_ranks(season, week)
+    payload = _board_from_spine(spine, season, week, ranks=ranks)
     board = HIGHLIGHTS_DIR / str(season) / f"w{week}.json"
     _write_json(board, payload)
 
