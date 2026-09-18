@@ -7,7 +7,7 @@
 - Drop NGS `week == 0` (season totals) from the weekly spine.
 - Left-join enrichment tables; preserve nulls (`missing_source` later — never impute 0).
 - Use GSIS `player_id` as the canonical key; map PFR via `ff_playerids`. FantasyPros weekly ECR joins `fantasypros_id` → `gsis_id`; null GSIS omits the rank.
-- Apply ramp–hold as `min_n = n_base * min(as_of_week, 5)` with `as_of_week` = viewed NFL week.
+- Apply ramp–hold as `min_n = n_base * min(completed_week, 5)`. `as_of_week` is the latest REG week in the YTD slice (partial slates allowed). `completed_week` is the last consecutive REG week where every scheduled game has scores, floored at 1 and capped at `as_of_week`. Thursday of week N does not bump the bar. Publish `completedWeek` on pages, league, leaderboards, and `index/{current,seasons}.json`.
 - Build fantasy position ranks once per `(season, as_of_week)` (`fantasy_rank.fantasy_pos_ranks`) and attach optional `fantasyPosRank` / `fantasyPosRankKind` on page/leaderboard/highlight rows. Never write them to `index/players.json`.
 
 ## Ask First
@@ -33,6 +33,7 @@
 - FTN, participation, and PBP are cached in `data/raw/` but not fully exploded into the spine yet (play grain).
 - Cached parquet under `data/` is gitignored; `--force` / `--force-fetch` redownloads.
 - Stage C YTD rates use ratio-of-sums; passer rating is recomputed from YTD components.
+- Ramp–hold reads `data/raw/schedules_{season}.parquet`. Missing file falls back to `as_of_week` (historical season-end behavior). Do not use a prior YTD parquet’s `completed_week` when rebuilding Stage C — recompute from the schedule.
 - CPOE prefers NGS volume-weighted `completion_percentage_above_expectation` (pp). Averaging weekly box `passing_cpoe` can cancel toward 0 and disagree with season cmp% − xcmp%.
 - NGS aggressiveness / expected completion arrive as 0–100; Stage C scales them to 0–1 for Knowball `percent` format.
 - Stage C covers all position groups via `catalog/registry.py`. Play-grain stats (`red_zone_*`, `route_pct`) stay `missing_source` until PBP/participation are on the spine — leaderboard `denomYtd` is null for those ids.

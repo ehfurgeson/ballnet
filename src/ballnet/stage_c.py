@@ -11,7 +11,7 @@ import polars as pl
 from ballnet.catalog.registry import stats_for_group
 from ballnet.catalog.types import StatDefinition, Unavailable
 from ballnet.paths import SPINE_DIR, YTD_DIR, ensure_data_dirs
-from ballnet.ramp_hold import min_n
+from ballnet.ramp_hold import completed_week_from_schedule, min_n
 from ballnet.rating import passer_rating
 
 # NGS weekly averages often arrive 0–100; Knowball percent format is 0–1.
@@ -739,9 +739,10 @@ def _player_value(stat_id: str, row: dict) -> float | None:
 def _qualify(
     stat: StatDefinition,
     season: int,
-    as_of_week: int,
     row: dict,
     position_group: str,
+    *,
+    ramp_week: int,
 ) -> tuple[bool, float | None, float | None, Unavailable | None]:
     if stat.always_unavailable or stat.min_n_base is None:
         return False, None, None, "not_in_nflverse"
@@ -751,7 +752,7 @@ def _qualify(
         return False, None, None, "missing_source"
 
     denom = _denom_value(row, stat.denom)
-    threshold = min_n(stat.min_n_base, as_of_week)
+    threshold = min_n(stat.min_n_base, ramp_week)
     value = _player_value(stat.id, row)
 
     if denom is None or denom < threshold:
@@ -768,20 +769,26 @@ def wide_to_long(
     as_of_week: int,
     position_group: str,
     stats: Iterable[StatDefinition] | None = None,
+    completed_week: int | None = None,
 ) -> pl.DataFrame:
     """Emit Stage C long rows matching viz.player_stat_values grain (no percentile yet)."""
     records: list[dict] = []
     stat_list = list(stats) if stats is not None else stats_for_group(position_group)
+    ramp = (
+        completed_week
+        if completed_week is not None
+        else completed_week_from_schedule(season, as_of_week)
+    )
     for row in wide.to_dicts():
         for stat in stat_list:
             if stat.always_unavailable:
                 # Omit always-unavailable ids from the panel (Knowball grays via catalog).
                 continue
             qualified, value, denom, reason = _qualify(
-                stat, season, as_of_week, row, position_group
+                stat, season, row, position_group, ramp_week=ramp
             )
             threshold = (
-                min_n(stat.min_n_base, as_of_week) if stat.min_n_base is not None else None
+                min_n(stat.min_n_base, ramp) if stat.min_n_base is not None else None
             )
             records.append(
                 {
@@ -792,6 +799,7 @@ def wide_to_long(
                     "position_group": row.get("position_group"),
                     "season": season,
                     "as_of_week": as_of_week,
+                    "completed_week": ramp,
                     "stat_id": stat.id,
                     "kind": stat.kind,
                     "higher_is_better": stat.higher_is_better,
@@ -811,6 +819,7 @@ def wide_to_long(
         "position_group": pl.Utf8,
         "season": pl.Int64,
         "as_of_week": pl.Int64,
+        "completed_week": pl.Int64,
         "stat_id": pl.Utf8,
         "kind": pl.Utf8,
         "higher_is_better": pl.Boolean,
@@ -846,7 +855,14 @@ def build_ytd(
     )
     panel = _ensure_optional_float_cols(panel)
     wide = _AGGREGATORS[position_group](panel)
-    long = wide_to_long(wide, season=season, as_of_week=as_of_week, position_group=position_group)
+    completed = completed_week_from_schedule(season, as_of_week)
+    long = wide_to_long(
+        wide,
+        season=season,
+        as_of_week=as_of_week,
+        position_group=position_group,
+        completed_week=completed,
+    )
 
     out = YTD_DIR / f"ytd_{position_group}_{season}_w{as_of_week}.parquet"
     long.write_parquet(out)

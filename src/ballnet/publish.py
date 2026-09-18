@@ -18,6 +18,7 @@ from ballnet.fantasy_rank import FantasyPosRank, attach_fantasy_pos_rank, fantas
 from ballnet.leaderboard import publish_leaderboards
 from ballnet.paths import INDEX_DIR, LEAGUE_DIR, PAGES_DIR, YTD_DIR, ensure_data_dirs
 from ballnet.percentiles import attach_percentiles
+from ballnet.ramp_hold import completed_week_for
 
 # Compact JSON — player pages are scalars only; curves live under data/league/.
 _JSON_DUMP_KW: dict[str, Any] = {"separators": (",", ":"), "ensure_ascii": False}
@@ -116,6 +117,7 @@ def _page_dict(
     catalog_stats: list[StatDefinition],
     seasons: list[int] | None = None,
     ranks: dict[str, FantasyPosRank] | None = None,
+    completed_week: int | None = None,
 ) -> dict[str, Any]:
     stats_out: list[dict[str, Any]] = []
     for stat in catalog_stats:
@@ -137,11 +139,13 @@ def _page_dict(
     }
     attach_fantasy_pos_rank(player, player_id, ranks)
 
+    cw = completed_week if completed_week is not None else completed_week_for(season, as_of_week)
     return {
         "schemaVersion": 1,
         "player": player,
         "season": season,
         "asOfWeek": as_of_week,
+        "completedWeek": cw,
         "stats": stats_out,
     }
 
@@ -181,6 +185,7 @@ def publish_league_group(
         "schemaVersion": 1,
         "season": season,
         "asOfWeek": as_of_week,
+        "completedWeek": completed_week_for(season, as_of_week),
         "positionGroup": position_group,
         "stats": stats,
     }
@@ -239,6 +244,7 @@ def publish_player_page(
         by_id=by_id,
         catalog_stats=stats_for_group(position_group),
         ranks=ranks,
+        completed_week=completed_week_for(season, as_of_week),
     )
 
     out = PAGES_DIR / str(season) / f"w{as_of_week}" / f"{player_id}.json"
@@ -288,6 +294,7 @@ def publish_group(
         )
 
     catalog_stats = stats_for_group(position_group)
+    completed_week = completed_week_for(season, as_of_week)
     week_dir = PAGES_DIR / str(season) / f"w{as_of_week}"
     week_dir.mkdir(parents=True, exist_ok=True)
     if also_current:
@@ -311,6 +318,7 @@ def publish_group(
             by_id=by_id,
             catalog_stats=catalog_stats,
             ranks=ranks,
+            completed_week=completed_week,
         )
         _write_json(week_dir / f"{pid}.json", page)
         paths += 1
@@ -377,42 +385,67 @@ def write_players_index(
     return out
 
 
-def write_current_index(season: int, as_of_week: int) -> Path:
+def write_current_index(
+    season: int,
+    as_of_week: int,
+    *,
+    completed_week: int | None = None,
+) -> Path:
     """Write `index/current.json` mirroring meta_current_week."""
     ensure_data_dirs()
+    cw = completed_week if completed_week is not None else completed_week_for(season, as_of_week)
     out = INDEX_DIR / "current.json"
     _write_json(
         out,
-        {"schemaVersion": 1, "season": season, "asOfWeek": as_of_week},
+        {
+            "schemaVersion": 1,
+            "season": season,
+            "asOfWeek": as_of_week,
+            "completedWeek": cw,
+        },
     )
     return out
 
 
+def _slice_row(s: dict[str, int]) -> dict[str, int]:
+    as_of = int(s["asOfWeek"])
+    return {
+        "season": int(s["season"]),
+        "asOfWeek": as_of,
+        "completedWeek": int(s["completedWeek"]) if s.get("completedWeek") is not None else as_of,
+    }
+
+
 def write_seasons_index(slices: Iterable[dict[str, int]]) -> Path:
-    """Write `index/seasons.json` — published (season, asOfWeek) pairs."""
+    """Write `index/seasons.json` — published (season, asOfWeek, completedWeek) triples."""
     ensure_data_dirs()
-    ordered = sorted(
-        ({"season": int(s["season"]), "asOfWeek": int(s["asOfWeek"])} for s in slices),
-        key=lambda s: s["season"],
-    )
+    ordered = sorted((_slice_row(s) for s in slices), key=lambda s: s["season"])
     out = INDEX_DIR / "seasons.json"
     _write_json(out, {"schemaVersion": 1, "seasons": ordered})
     return out
 
 
-def upsert_seasons_index(season: int, as_of_week: int) -> Path:
-    """Insert or replace one season's asOfWeek in `index/seasons.json`."""
+def upsert_seasons_index(
+    season: int,
+    as_of_week: int,
+    *,
+    completed_week: int | None = None,
+) -> Path:
+    """Insert or replace one season's asOfWeek / completedWeek in `index/seasons.json`."""
     ensure_data_dirs()
-    by_season: dict[int, int] = {}
+    by_season: dict[int, dict[str, int]] = {}
     existing = INDEX_DIR / "seasons.json"
     if existing.exists():
         prev = json.loads(existing.read_text(encoding="utf-8"))
         for row in prev.get("seasons") or []:
-            by_season[int(row["season"])] = int(row["asOfWeek"])
-    by_season[int(season)] = int(as_of_week)
-    return write_seasons_index(
-        {"season": s, "asOfWeek": w} for s, w in by_season.items()
-    )
+            by_season[int(row["season"])] = _slice_row(row)
+    cw = completed_week if completed_week is not None else completed_week_for(season, as_of_week)
+    by_season[int(season)] = {
+        "season": int(season),
+        "asOfWeek": int(as_of_week),
+        "completedWeek": int(cw),
+    }
+    return write_seasons_index(by_season.values())
 
 
 def rebuild_index_from_pages(

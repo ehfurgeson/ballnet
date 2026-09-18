@@ -90,6 +90,7 @@ uv run ballnet publish-range --start 2016 --end $Y --skip-pipeline --no-current
 ## Failure modes to watch
 
 - Empty/partial nflverse week → sparse YTD / wrong as-of-week — verify spine week max before publish
+- Mid-week TNF: `--as-of-week` is the latest played week so those boxes land in YTD; ramp–hold uses published `completedWeek` (last fully scored week) until the slate is final
 - Storage free-tier burst drops — retry `upload-storage --season YEAR` (upsert)
 - Index out of sync with Knowball search — re-run `upload-storage --index` (Knowball reads Storage, not a git-synced copy)
 

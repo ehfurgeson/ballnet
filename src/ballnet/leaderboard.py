@@ -14,6 +14,7 @@ from ballnet.catalog.registry import POSITION_GROUPS, stats_for_group
 from ballnet.fantasy_rank import FantasyPosRank, attach_fantasy_pos_rank, fantasy_pos_ranks
 from ballnet.paths import LEADERBOARDS_DIR, YTD_DIR, ensure_data_dirs
 from ballnet.percentiles import attach_percentiles
+from ballnet.ramp_hold import completed_week_for
 
 # Mirror publish.PUBLISHABLE_GROUPS without importing publish (cycle risk).
 _DEFAULT_GROUPS: tuple[str, ...] = tuple(g for g in POSITION_GROUPS if g != "returner")
@@ -111,6 +112,7 @@ def build_leaderboard_payload(
         "schemaVersion": 1,
         "season": season,
         "asOfWeek": as_of_week,
+        "completedWeek": completed_week_for(season, as_of_week),
         "positionGroup": position_group,
         "stats": stats_out,
     }
