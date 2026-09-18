@@ -73,8 +73,8 @@ CLI: `uv run ballnet upload-storage --index --season YEAR` (uploads pages + leag
 
 ### Knowball local wiring
 
-- Search / bios / season map: Knowball loads `index/*.json` from Supabase Storage (or sibling `ballnet/data` locally). Do not commit Ballnet JSON into Knowball.
-- Page + league: Storage when remote configured; for local smoke set `VIZ_PREFER_LOCAL=1` and `BALLNET_DATA_DIR` to this repo’s `data/`. Clear those to use Storage.
+- Search / bios / season map / pages: Knowball loads JSON from Supabase Storage only (`NEXT_PUBLIC_SUPABASE_URL`). Do not commit Ballnet JSON into Knowball and do not point the Next app at sibling `ballnet/data`.
+- After publish, `upload-storage` is required before the UI can show the change.
 - Do **not** import page JSON into the Next bundle. **No** Supabase client in Knowball.
 
 ---
@@ -83,7 +83,7 @@ CLI: `uv run ballnet upload-storage --index --season YEAR` (uploads pages + leag
 
 ### 1. Deploy Knowball + weekly refresh
 
-- Point Knowball at Storage (no `VIZ_PREFER_LOCAL`) for production.
+- Knowball local and prod both read Storage; `upload-storage` after every publish.
 - Follow `docs/WEEKLY_OPS.md` for post-game updates; implement CLI `refresh` when ready to automate.
 
 ### 2. Spine / catalog gaps (do not block deploy unless asked)

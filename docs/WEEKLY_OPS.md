@@ -37,7 +37,7 @@ uv run ballnet upload-storage --index --season $YEAR --as-of-week $W --highlight
 
 `publish-all` without `--skip-pipeline` already runs C–E then G for all groups. It **merges** into the multi-season players/seasons index by default (use `--replace-index` only when intentionally wiping history).
 
-Knowball reads index/pages from **Supabase Storage** (or sibling `ballnet/data` locally). Do not commit Ballnet JSON into the Knowball repo.
+Knowball reads index/pages from **Supabase Storage** only (local `npm run dev` included). `publish-all` is not enough — `upload-storage` is what the UI sees. Do not commit Ballnet JSON into the Knowball repo.
 
 ## Automation options (pick later)
 

@@ -585,8 +585,8 @@ def publish_range(
 def sync_index_to_knowball(knowball_web: Path) -> dict[str, str]:
     """Copy search/current/seasons index into Knowball gitignored `public/viz/index/`.
 
-    Does not write into `src/data/ballnet/` — Storage (or sibling ballnet/data) is
-    the source of truth; the public/viz mirror is optional local smoke only.
+    Does not write into `src/data/ballnet/` — Storage is the source of truth.
+    Knowball does not read this public/viz mirror.
     """
     ensure_data_dirs()
     dest = knowball_web / "public" / "viz" / "index"
